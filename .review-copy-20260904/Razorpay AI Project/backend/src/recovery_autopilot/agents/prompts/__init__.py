@@ -1,0 +1,29 @@
+"""Prompt templates package."""
+
+from recovery_autopilot.agents.prompts.diagnosis_v1 import (
+    DIAGNOSIS_PROMPT_VERSION,
+    DIAGNOSIS_SYSTEM_INSTRUCTION,
+    DIAGNOSIS_USER_TEMPLATE,
+)
+from recovery_autopilot.agents.prompts.message_v1 import (
+    MESSAGE_PROMPT_VERSION,
+    MESSAGE_SYSTEM_INSTRUCTION,
+    MESSAGE_USER_TEMPLATE,
+)
+from recovery_autopilot.agents.prompts.proposal_v1 import (
+    PROPOSAL_PROMPT_VERSION,
+    PROPOSAL_SYSTEM_INSTRUCTION,
+    PROPOSAL_USER_TEMPLATE,
+)
+
+__all__ = [
+    "DIAGNOSIS_PROMPT_VERSION",
+    "DIAGNOSIS_SYSTEM_INSTRUCTION",
+    "DIAGNOSIS_USER_TEMPLATE",
+    "MESSAGE_PROMPT_VERSION",
+    "MESSAGE_SYSTEM_INSTRUCTION",
+    "MESSAGE_USER_TEMPLATE",
+    "PROPOSAL_PROMPT_VERSION",
+    "PROPOSAL_SYSTEM_INSTRUCTION",
+    "PROPOSAL_USER_TEMPLATE",
+]
