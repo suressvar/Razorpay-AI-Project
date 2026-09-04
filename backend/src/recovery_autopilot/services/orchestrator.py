@@ -9,8 +9,8 @@ from recovery_autopilot.integrations.notifications.simulator import UnifiedActio
 from recovery_autopilot.integrations.razorpay.event_mapper import RazorpayEventMapper
 from recovery_autopilot.integrations.razorpay.payment_links import PaymentLinkAdapter
 from recovery_autopilot.integrations.razorpay.webhook_verifier import RazorpayWebhookVerifier
-from recovery_autopilot.model_providers.factory import get_model_provider
-from recovery_autopilot.persistence.database import async_session_factory
+from recovery_autopilot.model_providers.fake import FakeModelProvider
+from recovery_autopilot.persistence.database import async_session_factory, init_db
 from recovery_autopilot.persistence.repository import SqlAlchemyRepository
 from recovery_autopilot.policies.guardrails import SafetyPolicyEngine
 from recovery_autopilot.synthetic.generator import generate_synthetic_dataset
@@ -35,6 +35,8 @@ class RecoveryOrchestrator:
             simulate_notifications=settings.SIMULATE_NOTIFICATIONS,
         )
         self.policy_engine = SafetyPolicyEngine(settings)
+        # Note: Depending on global state, might need import factory if not using fake default
+        from recovery_autopilot.model_providers.factory import get_model_provider
         self.model_provider = get_model_provider(settings)
 
     def create_workflow(self, repository: SqlAlchemyRepository) -> RecoveryWorkflow:
@@ -58,48 +60,48 @@ class RecoveryOrchestrator:
         # 1. Verify HMAC Signature
         self.webhook_verifier.verify(raw_body, signature)
 
-        # 2. Parse JSON & Extract Event ID
+        # 2. Parse event payload
         payload = json.loads(raw_body.decode("utf-8"))
         event_name = payload.get("event", "unknown")
+        event_id = event_id_header or payload.get("id") or f"evt_{hashlib.sha256(raw_body).hexdigest()[:16]}"
+        payload_str = raw_body.decode("utf-8")
 
-        # Stable event ID derivation
-        if event_id_header:
-            event_id = event_id_header
-        elif payload.get("id"):
-            event_id = payload["id"]
-        else:
-            sha_digest = hashlib.sha256(raw_body).hexdigest()[:32]
-            event_id = f"evt_sha_{sha_digest}"
-
+        # 3. Idempotent Deduplication Check
         async with async_session_factory() as session:
             repo = SqlAlchemyRepository(session)
-
-            # 3. Idempotent Deduplication Check
             is_new = await repo.save_webhook_event(
                 event_id=event_id,
                 event_type=event_name,
                 signature=signature,
-                payload_json=raw_body.decode("utf-8"),
+                payload_json=payload_str,
                 status="received",
             )
             if not is_new:
                 logger.info("Ignoring duplicate webhook event %s", event_id)
                 return {"status": "duplicate_ignored", "event_id": event_id}
-
             await session.commit()
 
-        # 4. Dispatch Processing
-        if event_name == "payment.failed":
-            ctx = RazorpayEventMapper.map_payment_failed(payload)
+        # 4. Handle PAYMENT FAILURE events
+        if event_name in ("payment.failed", "order.paid.failed", "subscription.charged.failed"):
+            context = RazorpayEventMapper.map_payment_failed(payload)
+
             async with async_session_factory() as session:
                 repo = SqlAlchemyRepository(session)
                 workflow = self.create_workflow(repo)
-                case = await workflow.process_failed_payment(ctx)
+                case = await workflow.process_failed_payment(context)
                 await repo.update_webhook_status(event_id, status="completed")
                 await session.commit()
-                return {"status": "accepted", "event_id": event_id, "case_id": case.case_id, "event": event_name}
 
-        elif event_name in ["payment.captured", "order.paid"]:
+                return {
+                    "status": "processed",
+                    "event_id": event_id,
+                    "case_id": case.case_id,
+                    "case_status": case.status.value,
+                    "action": case.latest_action_result.action.value if case.latest_action_result else None,
+                }
+
+        # 5. Handle PAYMENT SUCCESS / RECOVERY CAPTURE events
+        if event_name in ("payment.captured", "order.paid", "subscription.charged", "payment.authorized"):
             captured_ctx = RazorpayEventMapper.map_payment_captured(payload)
 
             async with async_session_factory() as session:
@@ -113,13 +115,11 @@ class RecoveryOrchestrator:
                 )
 
                 if not match_result:
-                    # Persist as unmatched event without modifying any recovery case
                     reason_msg = (
                         f"Uncorrelatable success event: payment_id={captured_ctx.payment_id}, "
                         f"order_id={captured_ctx.order_id}, sub_id={captured_ctx.subscription_id}, "
                         f"plink_id={captured_ctx.payment_link_id}"
                     )
-                    logger.warning("Unmatched payment success event %s: %s", event_id, reason_msg)
                     await repo.save_unmatched_event(
                         event_id=event_id,
                         event_type=event_name,
@@ -155,25 +155,37 @@ class RecoveryOrchestrator:
 
         return {"status": "accepted", "event_id": event_id, "event": event_name}
 
-
     async def seed_demo_data(self, count: int = 50, seed: int = 42) -> int:
         """Seed database with synthetic failure cases and run through initial recovery workflow."""
+        await init_db()
         scenarios = generate_synthetic_dataset(count=count, seed=seed)
         seeded = 0
 
-        for s in scenarios:
-            async with async_session_factory() as session:
-                repo = SqlAlchemyRepository(session)
-                workflow = self.create_workflow(repo)
+        # Use fast deterministic provider for rapid, zero-rate-limit demo seeding
+        fast_provider = FakeModelProvider(
+            provider_name="synthetic-seed-engine",
+            model_identifier="heuristic-deterministic-v1",
+        )
+
+        async with async_session_factory() as session:
+            repo = SqlAlchemyRepository(session)
+            workflow = RecoveryWorkflow(
+                provider=fast_provider,
+                policy_engine=self.policy_engine,
+                executor=self.unified_executor,
+                repository=repo,
+            )
+            for s in scenarios:
                 await workflow.process_failed_payment(s.context)
-                await session.commit()
                 seeded += 1
+            await session.commit()
 
         logger.info("Successfully seeded %d synthetic demo cases into database", seeded)
         return seeded
 
     async def clear_all_data(self) -> dict:
         """Completely wipe all records from database in synthetic / sandbox mode."""
+        await init_db()
         async with async_session_factory() as session:
             repo = SqlAlchemyRepository(session)
             counts = await repo.clear_all_data()

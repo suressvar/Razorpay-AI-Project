@@ -22,6 +22,9 @@ import Copilot from './pages/Copilot';
 import UnmatchedEvents from './pages/UnmatchedEvents';
 import AccountSettings from './pages/AccountSettings';
 
+import { PlayCircleOutlined } from '@ant-design/icons';
+import InteractiveDemoTour from './components/InteractiveDemoTour';
+
 const { Header, Content, Sider } = Layout;
 const { Text } = Typography;
 
@@ -29,6 +32,7 @@ export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
   const [dataMode, setDataMode] = useState<string>('live');
+  const [isTourOpen, setIsTourOpen] = useState<boolean>(false);
 
   // Determine active menu item
   const getSelectedKey = () => {
@@ -239,6 +243,15 @@ export default function App() {
             </div>
 
             <Space size="middle">
+              <button
+                onClick={() => setIsTourOpen(true)}
+                className="flex items-center gap-2 px-3.5 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-lg text-xs font-bold shadow-md shadow-blue-500/20 transition cursor-pointer select-none"
+                id="header-live-tour-btn"
+              >
+                <PlayCircleOutlined className="text-sm animate-pulse" />
+                <span>⚡ Live Demo Tour (5-Step)</span>
+              </button>
+
               <div className="flex items-center gap-2 px-3 py-1 bg-emerald-50 border border-emerald-200 rounded-md">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
                 <span className="text-xs font-semibold text-emerald-800">AI Agent Active</span>
@@ -248,6 +261,7 @@ export default function App() {
 
           {/* Page Content */}
           <Content style={{ padding: '24px 28px', minHeight: 'calc(100vh - 60px)' }}>
+            <InteractiveDemoTour open={isTourOpen} onClose={() => setIsTourOpen(false)} />
             <Routes>
               <Route path="/" element={<Overview />} />
               <Route path="/copilot" element={<Copilot />} />

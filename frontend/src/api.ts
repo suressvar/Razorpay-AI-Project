@@ -136,7 +136,9 @@ export async function seedDemoData(count: number = 50, seed: number = 42): Promi
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ count, seed }),
   });
-  if (!res.ok) throw new Error('Failed to seed demo data');
+  if (!res.ok) {
+    await handleResponseError(res, 'Failed to seed demo data');
+  }
   return res.json();
 }
 
@@ -145,7 +147,9 @@ export async function clearAllDemoData(): Promise<any> {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
   });
-  if (!res.ok) throw new Error('Failed to clear application demo data');
+  if (!res.ok) {
+    await handleResponseError(res, 'Failed to clear application demo data');
+  }
   return res.json();
 }
 
@@ -244,11 +248,14 @@ export async function fetchVoiceEvaluation(): Promise<any> {
   return res.json();
 }
 
-export async function startVoiceSession(caseId: string): Promise<any> {
+export async function startVoiceSession(
+  caseId: string,
+  languageHint: import('./types').VoiceLanguage = 'english'
+): Promise<any> {
   const res = await fetch(`${API_BASE}/voice/sessions/start`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ case_id: caseId }),
+    body: JSON.stringify({ case_id: caseId, language_hint: languageHint }),
   });
   if (!res.ok) {
     const err = await res.json();
@@ -276,16 +283,63 @@ export async function setVoiceSessionConsent(sessionId: string, consentGranted: 
   return res.json();
 }
 
-export async function sendVoiceUtterance(sessionId: string, text: string): Promise<any> {
+export async function sendVoiceUtterance(
+  sessionId: string,
+  text: string,
+  languageHint?: import('./types').VoiceLanguage,
+  transcriptionConfidence?: number
+): Promise<any> {
   const res = await fetch(`${API_BASE}/voice/sessions/${sessionId}/utterance`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text }),
+    body: JSON.stringify({
+      text,
+      language_hint: languageHint,
+      transcription_confidence: transcriptionConfidence,
+    }),
   });
   if (!res.ok) {
     const err = await res.json();
     throw new Error(err.detail || 'Failed to process voice utterance');
   }
+  return res.json();
+}
+
+export async function sendVoiceAudioUtterance(
+  sessionId: string,
+  audioBase64: string,
+  languageHint?: string,
+  profile: string = 'balanced',
+  clientDiagnostics?: Record<string, any>
+): Promise<any> {
+  const res = await fetch(`${API_BASE}/voice/sessions/${sessionId}/audio`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      audio_base64: audioBase64,
+      language_hint: languageHint || null,
+      profile,
+      client_diagnostics: clientDiagnostics || {},
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.detail || 'Failed to process audio utterance');
+  }
+  return res.json();
+}
+
+export async function warmupSTT(profile: string = 'balanced'): Promise<any> {
+  const res = await fetch(`${API_BASE}/voice/stt/warmup?profile=${profile}`, {
+    method: 'POST',
+  });
+  if (!res.ok) throw new Error('Failed to warmup STT');
+  return res.json();
+}
+
+export async function getSTTInfo(): Promise<any> {
+  const res = await fetch(`${API_BASE}/voice/stt/info`);
+  if (!res.ok) throw new Error('Failed to fetch STT info');
   return res.json();
 }
 
@@ -421,6 +475,47 @@ export async function fetchSystemDiagnostics(): Promise<any> {
   return res.json();
 }
 
+// --- Multilingual Text-to-Speech (TTS) API ---
+
+export async function fetchTTSVoices(language?: string): Promise<import('./types').TTSVoiceProfile[]> {
+  const url = language ? `${API_BASE}/voice/tts/voices?language=${encodeURIComponent(language)}` : `${API_BASE}/voice/tts/voices`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('Failed to fetch TTS voices');
+  return res.json();
+}
+
+export async function synthesizeTTSAudio(params: {
+  text: string;
+  language?: string;
+  voice_id?: string;
+  rate?: number;
+  pitch?: number;
+  tier?: string;
+  use_ssml?: boolean;
+}): Promise<import('./types').TTSSynthesizeResponse> {
+  const res = await fetch(`${API_BASE}/voice/tts/synthesize`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.detail || 'TTS synthesis failed');
+  }
+  return res.json();
+}
+
+export async function fetchTTSBenchmark(): Promise<import('./types').TTSBenchmarkResponse> {
+  const res = await fetch(`${API_BASE}/voice/tts/benchmark`);
+  if (!res.ok) throw new Error('Failed to run TTS benchmark');
+  return res.json();
+}
+
+export async function fetchVoiceReadiness(): Promise<import('./types').VoiceReadinessReport> {
+  const res = await fetch(`${API_BASE}/voice/demo/readiness`);
+  if (!res.ok) throw new Error('Failed to fetch voice readiness audit');
+  return res.json();
+}
 
 
 

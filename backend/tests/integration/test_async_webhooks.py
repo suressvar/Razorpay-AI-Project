@@ -199,7 +199,7 @@ async def test_dead_letter_queue_transition():
     for attempt in range(1, 6):
         job = await webhook_queue.lease_next_job()
         if job:
-            await webhook_queue.mark_failed(event_id=job.event_id, error_msg=f"Failure #{attempt}", max_attempts=5)
+            await webhook_queue.mark_failed(event_id=job.event_id, error_msg=f"Failure #{attempt}", max_attempts=5, retry_delay_seconds=0.0)
 
     stats = await webhook_queue.get_stats()
     assert stats["dead_letter"] >= 1

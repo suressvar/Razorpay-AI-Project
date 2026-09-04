@@ -5,7 +5,7 @@ import pytest
 
 from recovery_autopilot.voice.voice_agent import VoiceRecoveryAgent
 from recovery_autopilot.voice.voice_guardrails import VoiceGuardrails
-from recovery_autopilot.voice.voice_models import VoiceIntent
+from recovery_autopilot.voice.voice_models import LanguageDetected, VoiceIntent
 
 
 @pytest.mark.asyncio
@@ -87,3 +87,46 @@ async def test_voice_agent_human_escalation():
 
     assert analysis.detected_intent == VoiceIntent.REQUEST_HUMAN
     assert analysis.requires_human_escalation is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("language", "utterance", "expected_script"),
+    [
+        (LanguageDetected.HINDI, "कृपया WhatsApp पर payment link भेजिए", "भेज"),
+        (LanguageDetected.BENGALI, "আমাকে WhatsApp-এ payment link পাঠান", "পাঠ"),
+        (LanguageDetected.TAMIL, "WhatsApp-ல் payment link அனுப்புங்கள்", "அனுப்ப"),
+        (LanguageDetected.TELUGU, "WhatsAppలో payment link పంపండి", "పంప"),
+        (LanguageDetected.MARATHI, "मला WhatsApp वर payment link पाठवा", "पाठव"),
+        (LanguageDetected.KANNADA, "WhatsAppನಲ್ಲಿ payment link ಕಳುಹಿಸಿ", "ಕಳುಹ"),
+    ],
+)
+async def test_voice_agent_speaks_selected_indian_language(language, utterance, expected_script):
+    agent = VoiceRecoveryAgent(provider_name="fake")
+
+    analysis = await agent.analyze_utterance(
+        utterance,
+        conversation_history=[],
+        language_hint=language,
+    )
+
+    assert analysis.detected_intent == VoiceIntent.SEND_PAYMENT_LINK
+    assert analysis.response_language == language
+    assert expected_script in analysis.agent_response
+    assert analysis.localized_responses[language.value] == analysis.agent_response
+
+
+@pytest.mark.asyncio
+async def test_low_transcription_confidence_never_executes_action():
+    agent = VoiceRecoveryAgent(provider_name="fake")
+
+    analysis = await agent.analyze_utterance(
+        "send the payment link",
+        conversation_history=[],
+        language_hint=LanguageDetected.ENGLISH,
+        transcription_confidence=0.31,
+    )
+
+    assert analysis.detected_intent == VoiceIntent.UNCLEAR
+    assert analysis.recommended_action == "clarify"
+    assert analysis.requires_confirmation is False

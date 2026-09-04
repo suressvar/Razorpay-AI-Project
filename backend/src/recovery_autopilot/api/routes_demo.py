@@ -32,27 +32,48 @@ class WebhookSimRequest(BaseModel):
     category: str = "INSUFFICIENT_FUNDS"
     amount_inr: float = 3499.0
     customer_name: Optional[str] = "Synthetic Test User"
+    payment_id: Optional[str] = None
+    subscription_id: Optional[str] = None
+    order_id: Optional[str] = None
+    invoice_id: Optional[str] = None
+    payment_link_id: Optional[str] = None
+
+
+import logging
+from recovery_autopilot.config import get_settings
+
+logger = logging.getLogger("recovery_autopilot.api.routes_demo")
 
 
 @router.post("/seed")
 async def seed_demo_data(req: SeedRequest):
     """Seed the database with synthetic cases for live demonstration."""
-    if not settings.SYNTHETIC_MODE:
-        raise HTTPException(status_code=403, detail="Demo seeding disabled in non-synthetic environments")
+    cfg = get_settings()
+    if not cfg.SYNTHETIC_MODE and cfg.PAYMENT_EXECUTION_MODE == "production":
+        raise HTTPException(status_code=403, detail="Demo seeding disabled in live production environments")
 
-    count = await orchestrator.seed_demo_data(count=req.count, seed=req.seed)
-    return {"status": "success", "seeded_count": count, "seed": req.seed}
+    try:
+        count = await orchestrator.seed_demo_data(count=req.count, seed=req.seed)
+        return {"status": "success", "seeded_count": count, "seed": req.seed}
+    except Exception as e:
+        logger.exception("Demo seeding error: %s", str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to seed demo data: {str(e)}")
 
 
 @router.post("/clear")
 @router.delete("/clear")
 async def clear_all_demo_data():
     """Clear all records (payment cases, audit logs, webhooks, voice sessions) from the database."""
-    if not settings.SYNTHETIC_MODE:
-        raise HTTPException(status_code=403, detail="Demo clearing disabled in non-synthetic environments")
+    cfg = get_settings()
+    if not cfg.SYNTHETIC_MODE and cfg.PAYMENT_EXECUTION_MODE == "production":
+        raise HTTPException(status_code=403, detail="Demo clearing disabled in live production environments")
 
-    counts = await orchestrator.clear_all_data()
-    return {"status": "success", "deleted": counts}
+    try:
+        counts = await orchestrator.clear_all_data()
+        return {"status": "success", "deleted": counts}
+    except Exception as e:
+        logger.exception("Demo data clearing error: %s", str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to clear demo data: {str(e)}")
 
 
 @router.post("/run-evaluation")
@@ -75,7 +96,12 @@ async def simulate_webhook_event(req: WebhookSimRequest):
     timestamp = int(time.time())
     event_id = f"evt_sim_{timestamp}"
 
-    if req.event_type == "payment.captured":
+    pay_id = req.payment_id or f"pay_sim_{timestamp}"
+    sub_id = req.subscription_id or f"sub_sim_{timestamp}"
+    ord_id = req.order_id or f"order_sim_{timestamp}"
+    inv_id = req.invoice_id or f"inv_sim_{timestamp}"
+
+    if req.event_type in ("payment.captured", "order.paid"):
         payload = {
             "entity": "event",
             "id": event_id,
@@ -83,15 +109,23 @@ async def simulate_webhook_event(req: WebhookSimRequest):
             "payload": {
                 "payment": {
                     "entity": {
-                        "id": f"pay_sim_{timestamp}",
+                        "id": pay_id,
+                        "order_id": ord_id if req.order_id else None,
+                        "invoice_id": inv_id if req.invoice_id else None,
+                        "subscription_id": sub_id if req.subscription_id else None,
+                        "payment_link_id": req.payment_link_id,
                         "amount": int(req.amount_inr * 100),
                         "status": "captured",
                         "currency": "INR",
+                        "notes": {
+                            "case_id": req.payment_id or "",
+                            "payment_link_id": req.payment_link_id or "",
+                        },
                     }
                 }
             },
         }
-    else:
+    elif req.category == "CHECKOUT_ABANDONED":
         payload = {
             "entity": "event",
             "id": event_id,
@@ -99,12 +133,59 @@ async def simulate_webhook_event(req: WebhookSimRequest):
             "payload": {
                 "payment": {
                     "entity": {
-                        "id": f"pay_sim_{timestamp}",
-                        "subscription_id": f"sub_sim_{timestamp}",
+                        "id": pay_id,
+                        "order_id": ord_id,
                         "amount": int(req.amount_inr * 100),
                         "currency": "INR",
-                        "method": "card",
-                        "error_code": "BAD_REQUEST_PAYMENT_FAILED" if req.category == "INSUFFICIENT_FUNDS" else "GATEWAY_TIMEOUT",
+                        "method": "upi",
+                        "error_code": "BAD_REQUEST_PAYMENT_TIMED_OUT",
+                        "error_description": "Customer dropped off at checkout / UPI intent timed out",
+                        "notes": {"customer_name": req.customer_name, "cart_id": f"cart_{timestamp}"},
+                        "email": "checkout.dropoff@example.com",
+                        "contact": "+919876543210",
+                    }
+                }
+            },
+        }
+    elif req.category == "OVERDUE_RECEIVABLE":
+        payload = {
+            "entity": "event",
+            "id": event_id,
+            "event": "payment.failed",
+            "payload": {
+                "payment": {
+                    "entity": {
+                        "id": pay_id,
+                        "invoice_id": inv_id,
+                        "amount": int(req.amount_inr * 100),
+                        "currency": "INR",
+                        "method": "netbanking",
+                        "error_code": "GATEWAY_ERROR_ISSUER_DOWN",
+                        "error_description": "B2B Netbanking overdue invoice settlement failed (HDFC)",
+                        "notes": {"customer_name": req.customer_name, "invoice_ref": f"INV-{timestamp}"},
+                        "email": "b2b.finance@enterprise-client.example.com",
+                        "contact": "+919811122233",
+                    }
+                }
+            },
+        }
+    else:
+        error_code = "BAD_REQUEST_PAYMENT_FAILED" if req.category == "INSUFFICIENT_FUNDS" else (
+            "EXPIRED_CARD" if req.category == "EXPIRED_CARD" else "GATEWAY_TIMEOUT"
+        )
+        payload = {
+            "entity": "event",
+            "id": event_id,
+            "event": "payment.failed",
+            "payload": {
+                "payment": {
+                    "entity": {
+                        "id": pay_id,
+                        "subscription_id": sub_id,
+                        "amount": int(req.amount_inr * 100),
+                        "currency": "INR",
+                        "method": "card" if req.category == "EXPIRED_CARD" else "upi",
+                        "error_code": error_code,
                         "error_description": f"Simulated failure: {req.category}",
                         "notes": {"customer_name": req.customer_name},
                         "email": "demo.user@synthetic-test.example.com",
@@ -117,4 +198,5 @@ async def simulate_webhook_event(req: WebhookSimRequest):
     raw_body = json.dumps(payload).encode("utf-8")
     signature = orchestrator.webhook_verifier.compute_signature(raw_body)
     res = await orchestrator.handle_webhook(raw_body, signature)
-    return {"status": "simulated", "webhook_result": res}
+    return {"status": "simulated", "event_id": event_id, "payment_id": pay_id, "webhook_result": res}
+

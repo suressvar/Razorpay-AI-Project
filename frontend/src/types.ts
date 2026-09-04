@@ -278,12 +278,28 @@ export type VoiceIntent =
   | 'unclear'
   | 'unknown';
 
+export type VoiceLanguage =
+  | 'auto'
+  | 'english'
+  | 'hindi'
+  | 'kannada'
+  | 'tamil'
+  | 'telugu'
+  | 'marathi'
+  | 'bengali'
+  | 'hinglish'
+  | 'kanglish'
+  | 'tanglish'
+  | 'tenglish'
+  | 'marathi_english'
+  | 'bengali_english';
+
 export interface VoiceTurn {
   turn_id: string;
   role: 'system' | 'agent' | 'customer';
   text: string;
   translated_text?: string;
-  language: 'hinglish' | 'hindi' | 'english' | 'unknown';
+  language: VoiceLanguage | 'unknown';
   detected_intent?: VoiceIntent;
   confidence_score: number;
   action_suggested?: string;
@@ -307,6 +323,7 @@ export interface VoiceSession {
   amount: number;
   currency: string;
   failure_reason: string;
+  preferred_language: VoiceLanguage;
   state: VoiceSessionState;
   has_consent: boolean;
   turns: VoiceTurn[];
@@ -328,15 +345,81 @@ export interface VoiceScenarioPreset {
   expected_outcome: string;
 }
 
+export type STTModelProfile = 'fast' | 'balanced' | 'accurate';
+
+export interface AudioDiagnostics {
+  microphone_name?: string;
+  input_sample_rate: number;
+  processed_sample_rate: number;
+  recording_duration_sec: number;
+  speech_duration_sec: number;
+  signal_level_rms: number;
+  peak_amplitude: number;
+  is_clipped: boolean;
+  detected_language: string;
+  transcription_confidence: number;
+  latency_ms: number;
+  raw_transcript: string;
+  normalized_transcript: string;
+  extracted_intent: string;
+}
+
+export interface TranscriptMetadata {
+  original_transcript: string;
+  normalized_transcript: string;
+  detected_language: string;
+  language_confidence: number;
+  alternative_languages: string[];
+  code_switched: boolean;
+  transcription_confidence: number;
+  needs_clarification: boolean;
+}
+
+export interface StructuredIntentResult {
+  intent: string;
+  confidence: number;
+  entities: {
+    promised_date?: string | null;
+    promised_time?: string | null;
+    amount?: number | null;
+    requested_language?: string | null;
+  };
+  requires_confirmation: boolean;
+  requires_human: boolean;
+  clarification_question?: string | null;
+  safety_reason?: string | null;
+}
+
 export interface VoiceEvaluationReport {
-  total_evaluated: number;
-  intent_accuracy: number;
-  macro_f1: number;
-  language_accuracy: number;
-  safety_violation_rate: number;
-  human_escalation_fidelity: number;
-  per_class_metrics: Record<string, { precision: number; recall: number; f1: number; support: number }>;
-  dataset_size: number;
+  total_benchmark_cases?: number;
+  total_evaluated?: number;
+  overall_intent_accuracy?: number;
+  intent_accuracy?: number;
+  macro_f1?: number;
+  macro_precision?: number;
+  macro_recall?: number;
+  language_identification_accuracy?: number;
+  language_accuracy?: number;
+  critical_intent_recall?: number;
+  false_confirmation_rate?: number;
+  clarification_rate?: number;
+  safety_violations_detected?: number;
+  anti_otp_pin_guardrail_pass?: boolean;
+  median_latency_ms?: number;
+  p95_latency_ms?: number;
+  per_language_report?: Record<
+    string,
+    {
+      total_utterances: number;
+      intent_accuracy: number;
+      language_accuracy: number;
+      avg_wer: number;
+      median_latency_ms: number;
+      p95_latency_ms: number;
+    }
+  >;
+  supported_languages?: string[];
+  benchmark_dataset_version?: string;
 }
 
 export interface AccountSettingsData {
@@ -402,4 +485,92 @@ export interface AccountSettingsData {
   };
 }
 
+export interface TTSVoiceProfile {
+  voice_id: string;
+  name: string;
+  language: string;
+  locale: string;
+  gender: 'female' | 'male' | 'neutral';
+  sample_rate: number;
+  naturalness_score: number;
+  description: string;
+  is_native: boolean;
+}
+
+export interface TTSSynthesizeResponse {
+  audio_base64: string;
+  audio_format: string;
+  sample_rate: number;
+  duration_sec: number;
+  text_spoken: string;
+  ssml_used?: string | null;
+  language: string;
+  voice_id: string;
+  tier: string;
+  metadata: {
+    voice_name?: string;
+    locale?: string;
+    gender?: string;
+    latency_ms?: number;
+    original_text?: string;
+  };
+}
+
+export interface TTSBenchmarkSample {
+  test_id: string;
+  category: string;
+  language: string;
+  voice_id: string;
+  voice_name: string;
+  raw_text: string;
+  rendered_text: string;
+  duration_sec: number;
+  audio_base64: string;
+  scores: {
+    pronunciation: number;
+    intelligibility: number;
+    naturalness: number;
+    pace: number;
+    language_correctness: number;
+  };
+}
+
+export interface TTSBenchmarkResponse {
+  total_test_cases: number;
+  normalization_pass_rate: number;
+  audio_synthesis_pass_rate: number;
+  supported_languages: string[];
+  available_voices: TTSVoiceProfile[];
+  sample_gallery: TTSBenchmarkSample[];
+  metrics: {
+    overall_pronunciation_score: number;
+    intelligibility_score: number;
+    naturalness_score: number;
+    pace_score: number;
+    zero_credential_leak_rate: number;
+  };
+}
+
+export interface VoiceReadinessCheckItem {
+  category: string;
+  name: string;
+  passed: boolean;
+  details: string;
+  metric: string;
+}
+
+export interface VoiceReadinessReport {
+  is_ready: boolean;
+  readiness_score: number;
+  demo_mode: string;
+  audit_latency_ms: number;
+  supported_languages: Array<{
+    code: string;
+    name: string;
+    native: string;
+    voice: string;
+  }>;
+  checks: VoiceReadinessCheckItem[];
+  summary: string;
+}
 

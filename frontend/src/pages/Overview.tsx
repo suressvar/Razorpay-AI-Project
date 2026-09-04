@@ -11,6 +11,8 @@ import {
   Timeline,
   Alert,
   Tooltip as AntTooltip,
+  Dropdown,
+  MenuProps,
 } from 'antd';
 import {
   SyncOutlined,
@@ -23,6 +25,11 @@ import {
   SafetyCertificateOutlined,
   PlayCircleOutlined,
   FieldTimeOutlined,
+  DownloadOutlined,
+  FileExcelOutlined,
+  FileTextOutlined,
+  ShoppingCartOutlined,
+  CreditCardOutlined,
 } from '@ant-design/icons';
 import {
   AreaChart,
@@ -34,9 +41,10 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts';
-import { fetchMetricsSummary, seedDemoData, simulateWebhook } from '../api';
+import { fetchMetricsSummary, seedDemoData, simulateWebhook, fetchCases } from '../api';
 import { SummaryMetrics } from '../types';
 import { Card, KpiCard, PageHeader, Spinner, ErrorState } from '../components/Card';
+import { InteractiveDemoTour } from '../components/InteractiveDemoTour';
 
 const { Text } = Typography;
 
@@ -61,6 +69,7 @@ export default function Overview() {
   const [error, setError] = useState<string | null>(null);
   const [seeding, setSeeding] = useState(false);
   const [simulating, setSimulating] = useState(false);
+  const [isTourOpen, setIsTourOpen] = useState(false);
 
   const load = async () => {
     try {
@@ -92,11 +101,11 @@ export default function Overview() {
     }
   };
 
-  const handleSimulate = async () => {
+  const handleSimulate = async (category: string = 'INSUFFICIENT_FUNDS', amount: number = 3499) => {
     setSimulating(true);
     try {
-      await simulateWebhook('payment.failed', 'INSUFFICIENT_FUNDS', 3499);
-      message.success('Simulated Razorpay webhook: payment.failed received and processed by AI');
+      await simulateWebhook('payment.failed', category, amount);
+      message.success(`Simulated webhook: ${category} processed by AI Autopilot`);
       await load();
     } catch (e: any) {
       message.error(`Simulation failed: ${e.message}`);
@@ -104,6 +113,95 @@ export default function Overview() {
       setSimulating(false);
     }
   };
+
+  const handleExportReport = async (format: 'csv' | 'json') => {
+    try {
+      const cases = await fetchCases(undefined, undefined, 200);
+      if (format === 'csv') {
+        const headers = ['Case ID', 'Customer Name', 'Email', 'Phone', 'Amount (INR)', 'Failure Category', 'Status', 'Created At'];
+        const rows = cases.map((c) => [
+          c.case_id,
+          `"${c.context.customer_name || c.context.customer_id}"`,
+          `"${c.context.customer_email}"`,
+          `"${c.context.customer_phone || ''}"`,
+          c.context.amount_inr,
+          `"${c.context.failure_category}"`,
+          c.status,
+          `"${c.created_at}"`,
+        ]);
+        const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement('a');
+        link.setAttribute('href', encodedUri);
+        link.setAttribute('download', `razorpay_revenue_recovery_report_${Date.now()}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        message.success('Executive Recovery CSV Report downloaded');
+      } else {
+        const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(
+          JSON.stringify({ summary: metrics, cases }, null, 2)
+        )}`;
+        const link = document.createElement('a');
+        link.setAttribute('href', jsonString);
+        link.setAttribute('download', `razorpay_recovery_dataset_${Date.now()}.json`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        message.success('Recovery JSON Package downloaded');
+      }
+    } catch (e: any) {
+      message.error(`Export failed: ${e.message}`);
+    }
+  };
+
+  const exportMenuItems: MenuProps['items'] = [
+    {
+      key: 'csv',
+      label: 'Download CSV Summary',
+      icon: <FileExcelOutlined className="text-emerald-600" />,
+      onClick: () => handleExportReport('csv'),
+    },
+    {
+      key: 'json',
+      label: 'Export Complete JSON Dataset',
+      icon: <FileTextOutlined className="text-blue-600" />,
+      onClick: () => handleExportReport('json'),
+    },
+    {
+      key: 'print',
+      label: 'Print Executive Summary',
+      icon: <DownloadOutlined className="text-purple-600" />,
+      onClick: () => window.print(),
+    },
+  ];
+
+  const simulateMenuItems: MenuProps['items'] = [
+    {
+      key: 'upi',
+      label: 'UPI / Bank Timeout (₹3,499)',
+      icon: <DollarOutlined className="text-blue-600" />,
+      onClick: () => handleSimulate('BANK_TIMEOUT', 3499),
+    },
+    {
+      key: 'cart',
+      label: 'Checkout Cart Abandonment (₹2,899)',
+      icon: <ShoppingCartOutlined className="text-amber-600" />,
+      onClick: () => handleSimulate('CHECKOUT_ABANDONED', 2899),
+    },
+    {
+      key: 'invoice',
+      label: 'B2B Overdue Invoice (₹15,000)',
+      icon: <FileTextOutlined className="text-purple-600" />,
+      onClick: () => handleSimulate('OVERDUE_RECEIVABLE', 15000),
+    },
+    {
+      key: 'card',
+      label: 'Expired Subscription Card (₹4,999)',
+      icon: <CreditCardOutlined className="text-red-600" />,
+      onClick: () => handleSimulate('EXPIRED_CARD', 4999),
+    },
+  ];
 
   const getActorTag = (actor: string) => {
     switch (actor) {
@@ -126,26 +224,56 @@ export default function Overview() {
         title="Payment Recovery Dashboard"
         actions={
           <Space>
-            <Button
-              icon={<PlayCircleOutlined />}
-              onClick={handleSimulate}
-              loading={simulating}
-              className="border-slate-300 font-medium"
-            >
-              Simulate Webhook
-            </Button>
+            {/* 1-Click Interactive Demo Tour Launcher */}
             <Button
               type="primary"
+              icon={<PlayCircleOutlined />}
+              onClick={() => setIsTourOpen(true)}
+              className="bg-indigo-600 hover:bg-indigo-700 shadow-md font-semibold border-none"
+            >
+              Interactive Demo Tour
+            </Button>
+
+            {/* Scenario Simulator Dropdown */}
+            <Dropdown menu={{ items: simulateMenuItems }} placement="bottomRight">
+              <Button
+                icon={<ThunderboltOutlined />}
+                loading={simulating}
+                className="border-slate-300 font-medium"
+              >
+                Simulate Scenario ▼
+              </Button>
+            </Dropdown>
+
+            {/* Export Report Dropdown */}
+            <Dropdown menu={{ items: exportMenuItems }} placement="bottomRight">
+              <Button
+                icon={<DownloadOutlined />}
+                className="border-slate-300 font-medium"
+              >
+                Export Report ▼
+              </Button>
+            </Dropdown>
+
+            <Button
               icon={<SyncOutlined />}
               onClick={handleSeed}
               loading={seeding}
-              className="bg-blue-600 font-medium"
+              className="border-slate-300 font-medium"
             >
-              Seed Demo Data
+              Seed Data
             </Button>
           </Space>
         }
       />
+
+      {/* Interactive Demo Tour Modal */}
+      <InteractiveDemoTour
+        open={isTourOpen}
+        onClose={() => setIsTourOpen(false)}
+        onFinished={load}
+      />
+
 
       {loading && (
         <div className="flex justify-center items-center py-24">
@@ -350,6 +478,13 @@ export default function Overview() {
           </Row>
         </>
       )}
+
+      {/* Interactive Demo Tour Modal */}
+      <InteractiveDemoTour
+        open={isTourOpen}
+        onClose={() => setIsTourOpen(false)}
+        onFinished={() => load()}
+      />
     </div>
   );
 }

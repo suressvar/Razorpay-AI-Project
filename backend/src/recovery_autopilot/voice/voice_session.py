@@ -15,6 +15,7 @@ from recovery_autopilot.domain.enums import CaseStatus
 from recovery_autopilot.domain.models import PaymentCase, PromiseToPay, utc_now
 from recovery_autopilot.persistence.models import VoiceSessionRecord
 from recovery_autopilot.persistence.repository import SqlAlchemyRepository
+from recovery_autopilot.voice.prompts import localized_responses
 from recovery_autopilot.voice.voice_agent import VoiceRecoveryAgent
 from recovery_autopilot.voice.voice_guardrails import VoiceGuardrails
 from recovery_autopilot.voice.voice_models import (
@@ -146,6 +147,7 @@ class VoiceSession:
         amount: float = 999.0,
         currency: str = "INR",
         failure_reason: str = "Insufficient funds in bank account",
+        preferred_language: LanguageDetected = LanguageDetected.ENGLISH,
     ):
         self.session_id = session_id
         self.case_id = case_id
@@ -154,6 +156,7 @@ class VoiceSession:
         self.amount = amount
         self.currency = currency
         self.failure_reason = failure_reason
+        self.preferred_language = preferred_language
 
         self.state: VoiceSessionState = VoiceSessionState.AWAITING_CONSENT
         self.has_consent: bool = False
@@ -175,6 +178,7 @@ class VoiceSession:
             "amount": self.amount,
             "currency": self.currency,
             "failure_reason": self.failure_reason,
+            "preferred_language": self.preferred_language.value,
             "state": self.state.value,
             "has_consent": self.has_consent,
             "turns": [t.model_dump(mode="json") for t in self.turns],
@@ -195,7 +199,7 @@ class VoiceSession:
             state=self.state.value,
             consent_granted=self.has_consent,
             consent_timestamp=self.created_at if self.has_consent else None,
-            language="hinglish",
+            language=self.preferred_language.value,
             turn_count=len(self.turns),
             detected_intent=last_intent,
             intent_confidence=last_conf,
@@ -220,7 +224,11 @@ class VoiceSessionManager:
         self.agent = VoiceRecoveryAgent()
 
 
-    async def start_session(self, case: PaymentCase) -> VoiceSession:
+    async def start_session(
+        self,
+        case: PaymentCase,
+        language_hint: LanguageDetected = LanguageDetected.ENGLISH,
+    ) -> VoiceSession:
         """
         Initializes a new voice recovery session for a given case.
         """
@@ -239,18 +247,12 @@ class VoiceSessionManager:
             amount=amount,
             currency=curr,
             failure_reason=fail_desc,
+            preferred_language=language_hint,
         )
 
-        initial_greeting = (
-            f"Namaste, main Razorpay Recovery Autopilot se Aarav bol raha hoon. "
-            f"Aapke subscription renewal (Rs {session.amount:,.2f}) ka payment bank se complete nahi ho paya tha. "
-            f"Kya main is payment ko resolve karne ke liye 1 minute aapse baat kar sakta hoon?"
-        )
-        initial_english = (
-            f"Hello, I am Aarav from Razorpay Recovery Autopilot. "
-            f"Your subscription renewal payment of Rs {session.amount:,.2f} could not be completed. "
-            f"Do I have your consent to assist you in resolving this payment?"
-        )
+        greetings = localized_responses("consent", amount=f"{session.amount:,.2f}")
+        initial_greeting = greetings[language_hint.value]
+        initial_english = greetings[LanguageDetected.ENGLISH.value]
 
         session.turns.append(
             VoiceTurn(
@@ -258,7 +260,7 @@ class VoiceSessionManager:
                 role=VoiceTurnRole.AGENT,
                 text=initial_greeting,
                 translated_text=initial_english,
-                language=LanguageDetected.HINGLISH,
+                language=language_hint,
                 confidence_score=1.0,
             )
         )
@@ -283,6 +285,11 @@ class VoiceSessionManager:
                 session_id=db_rec.session_id,
                 case_id=db_rec.case_id,
                 customer_id="cust_retrieved",
+                preferred_language=(
+                    LanguageDetected(db_rec.language)
+                    if db_rec.language in {item.value for item in LanguageDetected}
+                    else LanguageDetected.ENGLISH
+                ),
             )
             s.state = VoiceSessionState(db_rec.state)
             s.has_consent = db_rec.consent_granted
@@ -307,25 +314,35 @@ class VoiceSessionManager:
 
         if consent_granted:
             session.state = VoiceSessionState.AWAITING_INTENT
+            responses = localized_responses("consent_granted")
             greeting_turn = VoiceTurn(
                 turn_id=f"turn_{uuid.uuid4().hex[:8]}",
                 role=VoiceTurnRole.AGENT,
-                text="Shukriya! Aap chahein toh main turant WhatsApp par link bhej sakta hoon, ya fir agar aap kal pay karna chahein toh bata sakte hain.",
-                translated_text="Thank you! If you prefer, I can send a payment link via WhatsApp, or if you wish to pay later/tomorrow, please let me know.",
-                language=LanguageDetected.HINGLISH,
+                text=responses.get(session.preferred_language.value, responses.get("english", "")),
+                translated_text=(
+                    responses.get(LanguageDetected.ENGLISH.value)
+                    if session.preferred_language != LanguageDetected.ENGLISH
+                    else None
+                ),
+                language=session.preferred_language,
                 confidence_score=1.0,
             )
             session.turns.append(greeting_turn)
             session.audit_log.append("Consent granted by customer.")
         else:
             session.state = VoiceSessionState.TERMINATED
+            responses = localized_responses("consent_declined")
             session.turns.append(
                 VoiceTurn(
                     turn_id=f"turn_{uuid.uuid4().hex[:8]}",
                     role=VoiceTurnRole.AGENT,
-                    text="Koi baat nahi. Aapka samay dene ke liye dhanyawad. Have a nice day!",
-                    translated_text="No problem at all. Thank you for your time. Have a nice day!",
-                    language=LanguageDetected.HINGLISH,
+                    text=responses.get(session.preferred_language.value, responses.get("english", "")),
+                    translated_text=(
+                        responses.get(LanguageDetected.ENGLISH.value)
+                        if session.preferred_language != LanguageDetected.ENGLISH
+                        else None
+                    ),
+                    language=session.preferred_language,
                     confidence_score=1.0,
                 )
             )
@@ -334,25 +351,42 @@ class VoiceSessionManager:
         await self.repository.save_voice_session(session.to_record())
         return session
 
-    async def process_customer_utterance(self, session_id: str, customer_text: str) -> Tuple[VoiceSession, VoiceAgentAnalysis]:
+    async def process_customer_utterance(
+        self,
+        session_id: str,
+        customer_text: str,
+        language_hint: Optional[LanguageDetected] = None,
+        transcription_confidence: Optional[float] = None,
+    ) -> Tuple[VoiceSession, VoiceAgentAnalysis]:
         session = await self.get_session(session_id)
         if not session:
             raise ValueError(f"Session {session_id} not found")
 
         sanitized_text, flags = VoiceGuardrails.inspect_and_sanitize_input(customer_text)
 
+        effective_language = language_hint or session.preferred_language
+        session.preferred_language = effective_language
+
         cust_turn = VoiceTurn(
             turn_id=f"turn_{uuid.uuid4().hex[:8]}",
             role=VoiceTurnRole.CUSTOMER,
             text=sanitized_text,
-            language=LanguageDetected.HINGLISH,
+            language=effective_language,
+            confidence_score=transcription_confidence if transcription_confidence is not None else 1.0,
         )
         session.turns.append(cust_turn)
 
         case = await self.repository.get_case(session.case_id)
-        analysis = await self.agent.analyze_utterance(sanitized_text, session.turns, case)
+        analysis = await self.agent.analyze_utterance(
+            sanitized_text,
+            session.turns,
+            case,
+            language_hint=effective_language,
+            transcription_confidence=transcription_confidence,
+        )
         cust_turn.detected_intent = analysis.detected_intent
         cust_turn.confidence_score = analysis.confidence
+        cust_turn.language = analysis.detected_language
 
         if analysis.requires_human_escalation:
             session.state = VoiceSessionState.ESCALATED_TO_HUMAN
@@ -382,17 +416,25 @@ class VoiceSessionManager:
             session.clarification_attempts += 1
             if session.clarification_attempts >= 3:
                 session.state = VoiceSessionState.ESCALATED_TO_HUMAN
-                analysis.agent_response_hinglish = "Mujhe samajhne mein thodi dikkat ho rahi hai. Main aapko hamare executive se connect kar deta hoon."
-                analysis.agent_response_english = "I am having difficulty understanding. Let me connect you directly with a representative."
+                responses = localized_responses("escalation")
+                analysis.localized_responses = responses
+                analysis.agent_response_hinglish = responses[LanguageDetected.HINGLISH.value]
+                analysis.agent_response_english = responses[LanguageDetected.ENGLISH.value]
+                analysis.agent_response = responses[effective_language.value]
+                analysis.response_language = effective_language
             else:
                 session.state = VoiceSessionState.CLARIFICATION
 
         agent_turn = VoiceTurn(
             turn_id=f"turn_{uuid.uuid4().hex[:8]}",
             role=VoiceTurnRole.AGENT,
-            text=analysis.agent_response_hinglish,
-            translated_text=analysis.agent_response_english,
-            language=analysis.detected_language,
+            text=analysis.response_for(analysis.response_language),
+            translated_text=(
+                analysis.agent_response_english
+                if analysis.response_language != LanguageDetected.ENGLISH
+                else None
+            ),
+            language=analysis.response_language,
             confidence_score=analysis.confidence,
             action_suggested=analysis.recommended_action,
         )

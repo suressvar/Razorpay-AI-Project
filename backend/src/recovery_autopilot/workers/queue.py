@@ -189,6 +189,7 @@ class DurableWebhookQueue:
         event_id: str,
         error_msg: str,
         max_attempts: int = 5,
+        retry_delay_seconds: Optional[float] = None,
         session: Optional[AsyncSession] = None,
     ) -> None:
         """Handle job failure with exponential backoff or dead-letter state."""
@@ -209,8 +210,11 @@ class DurableWebhookQueue:
                 logger.error("Job %s moved to DEAD_LETTER queue after %s attempts. Error: %s", event_id, job.attempts, error_msg)
             else:
                 job.status = "queued"
-                # Exponential backoff with jitter: 2^(attempts-1) * 2s + jitter
-                delay = (2 ** (job.attempts - 1)) * 2 + random.uniform(0.1, 1.0)
+                # Exponential backoff with jitter or custom test delay
+                if retry_delay_seconds is not None:
+                    delay = retry_delay_seconds
+                else:
+                    delay = (2 ** (job.attempts - 1)) * 2 + random.uniform(0.1, 1.0)
                 job.lease_expires_at = now + timedelta(seconds=delay)
                 logger.warning("Job %s failed (attempt %s/%s). Retrying in %.2fs. Error: %s", event_id, job.attempts, max_attempts, delay, error_msg)
 

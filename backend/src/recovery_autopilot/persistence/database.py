@@ -10,11 +10,14 @@ from recovery_autopilot.persistence.models import Base
 
 logger = logging.getLogger("recovery_autopilot.persistence.database")
 
+connect_args = {"timeout": 60, "check_same_thread": False} if "sqlite" in settings.DATABASE_URL else {}
+
 # Configure database engine
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=False,
     future=True,
+    connect_args=connect_args,
 )
 
 async_session_factory = async_sessionmaker(
@@ -29,6 +32,13 @@ async def init_db() -> None:
     from sqlalchemy import text
 
     async with engine.begin() as conn:
+        if "sqlite" in settings.DATABASE_URL:
+            try:
+                await conn.execute(text("PRAGMA journal_mode=WAL;"))
+                await conn.execute(text("PRAGMA busy_timeout=30000;"))
+            except Exception as e:
+                logger.warning("Failed setting SQLite PRAGMA: %s", e)
+
         await conn.run_sync(Base.metadata.create_all)
 
         # Lightweight safe migrations for newly added columns
