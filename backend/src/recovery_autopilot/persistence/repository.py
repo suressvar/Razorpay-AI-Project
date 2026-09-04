@@ -28,6 +28,7 @@ from recovery_autopilot.persistence.models import (
     AuditEventRecord,
     PaymentCaseRecord,
     PromiseToPayRecord,
+    RecoveryActionRecord,
     UnmatchedWebhookRecord,
     VoiceSessionRecord,
     WebhookEventRecord,
@@ -460,10 +461,25 @@ class SqlAlchemyRepository(CaseRepositoryProtocol):
         self.session.add(rec)
         await self.session.flush()
 
-    async def get_promises_for_case(self, case_id: str) -> List[PromiseToPayRecord]:
-        """Retrieve all Promise-to-Pay records for a case."""
-        stmt = select(PromiseToPayRecord).where(PromiseToPayRecord.case_id == case_id).order_by(PromiseToPayRecord.created_at.desc())
-        res = await self.session.execute(stmt)
-        return list(res.scalars().all())
+    async def clear_all_data(self) -> Dict[str, int]:
+        """Delete all records across all tables for full sandbox/demo reset."""
+        from sqlalchemy import delete
+        
+        counts = {}
+        for model, name in [
+            (RecoveryActionRecord, "recovery_actions"),
+            (AuditEventRecord, "audit_events"),
+            (PromiseToPayRecord, "promises_to_pay"),
+            (VoiceSessionRecord, "voice_sessions"),
+            (UnmatchedWebhookRecord, "unmatched_webhooks"),
+            (WebhookEventRecord, "webhook_events"),
+            (PaymentCaseRecord, "payment_cases"),
+        ]:
+            res = await self.session.execute(delete(model))
+            counts[name] = res.rowcount or 0
+
+        await self.session.flush()
+        return counts
+
 
 

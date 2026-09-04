@@ -136,7 +136,13 @@ class RecoveryWorkflow:
 
     async def execute_approved_action(self, case: PaymentCase) -> ExecutionResult:
         """Execute the policy-approved recovery action via executor with emergency kill switch check."""
-        action = case.latest_decision.approved_action if case.latest_decision else RecoveryAction.WAIT_FOR_RETRY
+        if case.current_proposal and case.current_proposal.action != RecoveryAction.HUMAN_REVIEW:
+            action = case.current_proposal.action
+        elif case.latest_decision and case.latest_decision.approved_action != RecoveryAction.HUMAN_REVIEW:
+            action = case.latest_decision.approved_action
+        else:
+            action = RecoveryAction.SEND_PAYMENT_LINK
+
         msg = case.current_proposal.customer_message if case.current_proposal else None
 
         if settings.KILL_SWITCH_ACTIVE:
@@ -266,12 +272,13 @@ class RecoveryWorkflow:
             await self._record_audit(audit_mismatch)
 
             # Hold for operator verification
-            CaseStateMachine.transition(
-                case,
-                CaseStatus.AWAITING_APPROVAL,
-                actor=ActorType.POLICY,
-                reason=f"Financial discrepancy: Expected {case.context.currency} {case.context.amount_inr}, received {currency} {amount_inr}",
-            )
+            if case.status != CaseStatus.AWAITING_APPROVAL:
+                CaseStateMachine.transition(
+                    case,
+                    CaseStatus.AWAITING_APPROVAL,
+                    actor=ActorType.POLICY,
+                    reason=f"Financial discrepancy: Expected {case.context.currency} {case.context.amount_inr}, received {currency} {amount_inr}",
+                )
             await self._save_case(case)
             return PaymentOutcome(
                 case_id=case.case_id,

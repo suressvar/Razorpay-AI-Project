@@ -132,3 +132,25 @@ async def test_webhook_endpoint_processing():
         )
         assert resp2.status_code == 200
         assert resp2.json()["duplicate"] is True
+
+
+@pytest.mark.asyncio
+async def test_demo_clear_endpoint():
+    """POST /demo/clear completely purges all data across all tables."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # Seed 5 cases
+        await client.post("/demo/seed", json={"count": 5, "seed": 99})
+
+        # Clear all data
+        clear_resp = await client.post("/demo/clear")
+        assert clear_resp.status_code == 200
+        data = clear_resp.json()
+        assert data["status"] == "success"
+        assert "deleted" in data
+
+        # Check that cases list is now empty
+        list_resp = await client.get("/cases")
+        assert list_resp.status_code == 200
+        assert len(list_resp.json()) == 0
+

@@ -37,6 +37,9 @@ import {
   SendOutlined,
   ExperimentOutlined,
   FileTextOutlined,
+  DatabaseOutlined,
+  DeleteOutlined,
+  PlusCircleOutlined,
 } from '@ant-design/icons';
 import {
   fetchAccountSettings,
@@ -45,8 +48,11 @@ import {
   testAIModelInference,
   simulateTestWebhook,
   fetchSystemDiagnostics,
+  seedDemoData,
+  clearAllDemoData,
 } from '../api';
 import { AccountSettingsData } from '../types';
+
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -74,6 +80,16 @@ export default function AccountSettings() {
   const [form] = Form.useForm();
   const [isKillSwitchModalOpen, setIsKillSwitchModalOpen] = useState<boolean>(false);
   const [killSwitchReason, setKillSwitchReason] = useState<string>('');
+
+  // Demo Data & Sandbox State
+  const [seedingDemo, setSeedingDemo] = useState<boolean>(false);
+  const [demoCaseCount, setDemoCaseCount] = useState<number>(50);
+  const [demoSeed, setDemoSeed] = useState<number>(42);
+  const [seedFeedback, setSeedFeedback] = useState<any>(null);
+  const [clearingDemo, setClearingDemo] = useState<boolean>(false);
+  const [isClearModalOpen, setIsClearModalOpen] = useState<boolean>(false);
+  const [clearFeedback, setClearFeedback] = useState<any>(null);
+
 
   const loadAll = async () => {
     setLoading(true);
@@ -207,6 +223,38 @@ export default function AccountSettings() {
       message.error(err.message || 'Webhook simulation failed');
     } finally {
       setTestingWebhook(false);
+    }
+  };
+
+  const handleSeedDemoData = async (countOverride?: number) => {
+    setSeedingDemo(true);
+    setSeedFeedback(null);
+    const targetCount = countOverride || demoCaseCount;
+    try {
+      const res = await seedDemoData(targetCount, demoSeed);
+      setSeedFeedback(res);
+      message.success(`Successfully seeded ${res.seeded_count || targetCount} synthetic demo cases`);
+      await loadAll();
+    } catch (err: any) {
+      message.error(err.message || 'Failed to seed demo data');
+    } finally {
+      setSeedingDemo(false);
+    }
+  };
+
+  const handleClearAllData = async () => {
+    setClearingDemo(true);
+    setClearFeedback(null);
+    try {
+      const res = await clearAllDemoData();
+      setClearFeedback(res);
+      message.success('All application demo data has been deleted successfully');
+      setIsClearModalOpen(false);
+      await loadAll();
+    } catch (err: any) {
+      message.error(err.message || 'Failed to clear application data');
+    } finally {
+      setClearingDemo(false);
     }
   };
 
@@ -1019,6 +1067,197 @@ curl -X POST http://127.0.0.1:8000/copilot/chat \\
                 </div>
               ),
             },
+
+            // --- TAB 7: Demo Data & Sandbox Controls ---
+            {
+              key: 'demodata',
+              label: (
+                <span className="flex items-center gap-2 font-medium">
+                  <DatabaseOutlined /> Demo Data & Sandbox
+                </span>
+              ),
+              children: (
+                <div className="pt-4 space-y-6">
+                  {/* Overview status */}
+                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between">
+                    <div>
+                      <div className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                        <DatabaseOutlined className="text-blue-600" /> Demo Dataset & State Management
+                      </div>
+                      <div className="text-xs text-slate-500 mt-0.5">
+                        Generate synthetic payment cases for testing or purge all application data across all tables.
+                      </div>
+                    </div>
+                    <Tag color="blue" className="font-mono text-xs">
+                      SYNTHETIC SANDBOX
+                    </Tag>
+                  </div>
+
+                  {/* Section 1: Add Demo Data */}
+                  <div className="p-6 bg-slate-50 border border-slate-200 rounded-xl space-y-5">
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+                      <div>
+                        <div className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                          <PlusCircleOutlined className="text-blue-600" /> Generate & Seed Demo Cases
+                        </div>
+                        <div className="text-xs text-slate-500 mt-0.5">
+                          Synthesize failed payment cases across UPI, Netbanking, Cards, and degraded issuer channels.
+                        </div>
+                      </div>
+                      <Button
+                        type="primary"
+                        icon={<PlusCircleOutlined />}
+                        loading={seedingDemo}
+                        onClick={() => handleSeedDemoData()}
+                        size="middle"
+                        style={{ background: '#0052cc' }}
+                      >
+                        Seed {demoCaseCount} Demo Cases
+                      </Button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-1">
+                      <div>
+                        <div className="text-xs font-semibold text-slate-700 mb-2">
+                          Number of Demo Cases ({demoCaseCount} cases)
+                        </div>
+                        <Slider
+                          min={10}
+                          max={200}
+                          step={10}
+                          value={demoCaseCount}
+                          onChange={(val) => setDemoCaseCount(val)}
+                          marks={{ 10: '10', 50: '50', 100: '100', 200: '200' }}
+                        />
+                      </div>
+
+                      <div>
+                        <div className="text-xs font-semibold text-slate-700 mb-2">
+                          Random Generator Seed
+                        </div>
+                        <InputNumber
+                          min={1}
+                          max={999999}
+                          value={demoSeed}
+                          onChange={(val) => setDemoSeed(val || 42)}
+                          className="w-full"
+                          placeholder="e.g. 42"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="pt-2 flex flex-wrap items-center gap-3">
+                      <span className="text-xs text-slate-500 font-medium">Quick Presets:</span>
+                      <Button
+                        size="small"
+                        disabled={seedingDemo}
+                        onClick={() => {
+                          setDemoCaseCount(25);
+                          handleSeedDemoData(25);
+                        }}
+                      >
+                        Seed 25 Cases
+                      </Button>
+                      <Button
+                        size="small"
+                        disabled={seedingDemo}
+                        onClick={() => {
+                          setDemoCaseCount(50);
+                          handleSeedDemoData(50);
+                        }}
+                      >
+                        Seed 50 Cases (Standard)
+                      </Button>
+                      <Button
+                        size="small"
+                        disabled={seedingDemo}
+                        onClick={() => {
+                          setDemoCaseCount(100);
+                          handleSeedDemoData(100);
+                        }}
+                      >
+                        Seed 100 Cases (Stress Test)
+                      </Button>
+                    </div>
+
+                    {seedFeedback && (
+                      <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-xs font-mono text-emerald-800 flex items-center justify-between">
+                        <span className="flex items-center gap-2">
+                          <CheckCircleFilled className="text-emerald-600" />
+                          Successfully seeded {seedFeedback.seeded_count} payment recovery cases (seed: {seedFeedback.seed}).
+                        </span>
+                        <Tag color="success">SEEDED</Tag>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Section 2: Delete All Demo Data */}
+                  <div className="p-6 bg-red-50/50 border border-red-200 rounded-xl space-y-4">
+                    <div className="flex items-center justify-between pb-3 border-red-100 border-b">
+                      <div>
+                        <div className="font-bold text-red-700 text-sm flex items-center gap-2">
+                          <DeleteOutlined className="text-red-600" /> Reset & Delete All Application Data
+                        </div>
+                        <div className="text-xs text-red-600/80 mt-0.5">
+                          Permanently wipe all demo cases, audit timelines, webhook events, and voice sessions across the entire application.
+                        </div>
+                      </div>
+                      <Button
+                        danger
+                        type="primary"
+                        icon={<DeleteOutlined />}
+                        loading={clearingDemo}
+                        onClick={() => setIsClearModalOpen(true)}
+                        size="middle"
+                      >
+                        Delete All Demo Data
+                      </Button>
+                    </div>
+
+                    <div className="p-4 bg-white/80 rounded-lg border border-red-200/60 text-xs text-slate-700 space-y-2">
+                      <div className="font-semibold text-red-800 flex items-center gap-1.5">
+                        <ExclamationCircleOutlined /> What gets deleted:
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-slate-600">
+                        <div className="flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
+                          <span>All Payment Recovery Cases (`payment_cases`)</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
+                          <span>All Audit Logs & Events (`audit_events`)</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
+                          <span>All Ingested Webhooks (`webhook_events`)</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
+                          <span>All Voice Sessions & Transcripts (`voice_sessions`)</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
+                          <span>All Recovery Action Interventions (`recovery_actions`)</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
+                          <span>All Promise-to-Pay Records (`promises_to_pay`)</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {clearFeedback && (
+                      <div className="p-3 bg-red-100/70 border border-red-300 rounded-lg text-xs font-mono text-red-900 flex items-center justify-between">
+                        <span>
+                          Database wiped successfully: {JSON.stringify(clearFeedback.deleted)}
+                        </span>
+                        <Tag color="red">PURGED</Tag>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ),
+            },
           ]}
         />
       </Card>
@@ -1047,6 +1286,37 @@ curl -X POST http://127.0.0.1:8000/copilot/chat \\
           </div>
         </div>
       </Modal>
+
+      {/* Clear All Data Confirmation Modal */}
+      <Modal
+        title={
+          <div className="flex items-center gap-2 text-red-600 font-bold">
+            <ExclamationCircleOutlined /> Delete All Application Demo Data?
+          </div>
+        }
+        open={isClearModalOpen}
+        onOk={handleClearAllData}
+        onCancel={() => setIsClearModalOpen(false)}
+        okText="Yes, Delete All Data"
+        confirmLoading={clearingDemo}
+        okButtonProps={{ danger: true }}
+      >
+        <div className="py-2 text-slate-600 space-y-3 text-xs">
+          <p className="font-medium text-slate-800">
+            This action will permanently delete all records from the database across the entire application:
+          </p>
+          <ul className="list-disc pl-5 text-slate-500 space-y-1">
+            <li>Payment recovery cases and active states</li>
+            <li>Chronological audit events and timeline records</li>
+            <li>Ingested webhook payloads and unmatched event logs</li>
+            <li>Customer voice conversations and promise-to-pay pledges</li>
+          </ul>
+          <p className="text-red-600 font-semibold pt-1">
+            This action cannot be undone. All dashboard metrics will reset to zero.
+          </p>
+        </div>
+      </Modal>
     </div>
   );
 }
+

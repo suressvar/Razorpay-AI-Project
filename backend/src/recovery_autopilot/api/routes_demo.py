@@ -44,6 +44,17 @@ async def seed_demo_data(req: SeedRequest):
     return {"status": "success", "seeded_count": count, "seed": req.seed}
 
 
+@router.post("/clear")
+@router.delete("/clear")
+async def clear_all_demo_data():
+    """Clear all records (payment cases, audit logs, webhooks, voice sessions) from the database."""
+    if not settings.SYNTHETIC_MODE:
+        raise HTTPException(status_code=403, detail="Demo clearing disabled in non-synthetic environments")
+
+    counts = await orchestrator.clear_all_data()
+    return {"status": "success", "deleted": counts}
+
+
 @router.post("/run-evaluation")
 async def trigger_evaluation_run(req: EvalRequest):
     """Run 500-case simulation benchmark comparing Autopilot to Baseline."""

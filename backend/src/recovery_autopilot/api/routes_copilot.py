@@ -30,6 +30,7 @@ class CopilotCreatePaymentLinkRequest(BaseModel):
     customer_phone: str = Field(..., description="Recipient customer contact number")
     expiry_date: Optional[str] = Field(None, description="Optional link expiry date string")
     note: Optional[str] = Field(None, description="Optional note visible to customer")
+    agent_name: Optional[str] = Field("Support Agent", description="Name of logged-in support agent")
 
 
 @router.get("", response_model=Dict[str, Any])
@@ -38,7 +39,7 @@ async def copilot_info():
     return {
         "service": "AI Copilot Diagnostic Assistant",
         "description": "Cross-references Razorpay payment records to diagnose failures and send payment links.",
-        "frontend_ui_url": "http://localhost:5174/copilot",
+        "frontend_ui_url": "http://localhost:5173/copilot",
         "endpoints": {
             "chat": "POST /copilot/chat",
             "create_payment_link": "POST /copilot/create-payment-link",
@@ -80,7 +81,7 @@ async def create_copilot_payment_link(
             customer_phone=req.customer_phone,
             expiry_date=req.expiry_date,
             note=req.note,
-            operator_name=req.agent_name or "Support Agent",
+            operator_name=getattr(req, "agent_name", None) or "Support Agent",
         )
         return result
     except ValueError as exc:

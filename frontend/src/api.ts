@@ -11,15 +11,37 @@ import {
 
 const API_BASE = '';
 
+async function handleResponseError(res: Response, fallbackMessage: string): Promise<never> {
+  let errMsg = fallbackMessage;
+  try {
+    const err = await res.json();
+    if (typeof err.detail === 'string') {
+      errMsg = err.detail;
+    } else if (Array.isArray(err.detail)) {
+      errMsg = err.detail.map((d: any) => d.msg || JSON.stringify(d)).join(', ');
+    } else if (err.message) {
+      errMsg = err.message;
+    }
+  } catch {
+    const txt = await res.text().catch(() => '');
+    if (txt && !txt.includes('<!DOCTYPE') && !txt.includes('<html')) {
+      errMsg = txt;
+    } else {
+      errMsg = `${fallbackMessage} (Status ${res.status})`;
+    }
+  }
+  throw new Error(errMsg);
+}
+
 export async function fetchMetricsSummary(): Promise<SummaryMetrics> {
   const res = await fetch(`${API_BASE}/metrics/summary`);
-  if (!res.ok) throw new Error('Failed to fetch metrics summary');
+  if (!res.ok) await handleResponseError(res, 'Failed to fetch metrics summary');
   return res.json();
 }
 
 export async function fetchEvaluationMetrics(): Promise<BenchmarkReport> {
   const res = await fetch(`${API_BASE}/metrics/evaluation`);
-  if (!res.ok) throw new Error('Failed to fetch evaluation metrics');
+  if (!res.ok) await handleResponseError(res, 'Failed to fetch evaluation metrics');
   return res.json();
 }
 
@@ -34,37 +56,40 @@ export async function fetchCases(
   params.append('limit', limit.toString());
 
   const res = await fetch(`${API_BASE}/cases?${params.toString()}`);
-  if (!res.ok) throw new Error('Failed to fetch cases');
+  if (!res.ok) await handleResponseError(res, 'Failed to fetch cases');
   return res.json();
 }
 
 export async function fetchCaseDetail(caseId: string): Promise<PaymentCase> {
   const res = await fetch(`${API_BASE}/cases/${caseId}`);
-  if (!res.ok) throw new Error('Failed to fetch case details');
+  if (!res.ok) await handleResponseError(res, 'Failed to fetch case details');
   return res.json();
 }
 
 export async function fetchCaseAudit(caseId: string): Promise<AuditEvent[]> {
   const res = await fetch(`${API_BASE}/cases/${caseId}/audit`);
-  if (!res.ok) throw new Error('Failed to fetch case audit trail');
+  if (!res.ok) await handleResponseError(res, 'Failed to fetch case audit trail');
   return res.json();
 }
 
 export async function fetchCaseNotifications(caseId: string): Promise<NotificationPreview[]> {
   const res = await fetch(`${API_BASE}/cases/${caseId}/notifications`);
-  if (!res.ok) throw new Error('Failed to fetch case notifications');
+  if (!res.ok) await handleResponseError(res, 'Failed to fetch case notifications');
   return res.json();
 }
 
 export async function approveCase(caseId: string, operatorId: string = 'ops_admin'): Promise<any> {
   const res = await fetch(`${API_BASE}/cases/${caseId}/approve`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Operator-Role': 'admin',
+      'X-Operator-Id': operatorId,
+    },
     body: JSON.stringify({ operator_id: operatorId }),
   });
   if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.detail || 'Approval failed');
+    await handleResponseError(res, 'Approval failed');
   }
   return res.json();
 }
@@ -76,12 +101,15 @@ export async function rejectCase(
 ): Promise<any> {
   const res = await fetch(`${API_BASE}/cases/${caseId}/reject`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Operator-Role': 'admin',
+      'X-Operator-Id': operatorId,
+    },
     body: JSON.stringify({ operator_id: operatorId, reason }),
   });
   if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.detail || 'Rejection failed');
+    await handleResponseError(res, 'Rejection failed');
   }
   return res.json();
 }
@@ -89,13 +117,18 @@ export async function rejectCase(
 export async function retryCaseNow(caseId: string): Promise<any> {
   const res = await fetch(`${API_BASE}/cases/${caseId}/retry`, {
     method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Operator-Role': 'admin',
+      'X-Operator-Id': 'ops_admin',
+    },
   });
   if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.detail || 'Retry failed');
+    await handleResponseError(res, 'Retry failed');
   }
   return res.json();
 }
+
 
 export async function seedDemoData(count: number = 50, seed: number = 42): Promise<any> {
   const res = await fetch(`${API_BASE}/demo/seed`, {
@@ -106,6 +139,16 @@ export async function seedDemoData(count: number = 50, seed: number = 42): Promi
   if (!res.ok) throw new Error('Failed to seed demo data');
   return res.json();
 }
+
+export async function clearAllDemoData(): Promise<any> {
+  const res = await fetch(`${API_BASE}/demo/clear`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) throw new Error('Failed to clear application demo data');
+  return res.json();
+}
+
 
 export async function triggerEvaluationRun(size: number = 500, seed: number = 42): Promise<BenchmarkReport> {
   const res = await fetch(`${API_BASE}/demo/run-evaluation`, {

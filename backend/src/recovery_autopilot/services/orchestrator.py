@@ -172,6 +172,16 @@ class RecoveryOrchestrator:
         logger.info("Successfully seeded %d synthetic demo cases into database", seeded)
         return seeded
 
+    async def clear_all_data(self) -> dict:
+        """Completely wipe all records from database in synthetic / sandbox mode."""
+        async with async_session_factory() as session:
+            repo = SqlAlchemyRepository(session)
+            counts = await repo.clear_all_data()
+            await session.commit()
+            logger.info("Successfully wiped all data from database: %s", counts)
+            return counts
+
 
 # Global orchestrator instance
 orchestrator = RecoveryOrchestrator()
+

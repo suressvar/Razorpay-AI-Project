@@ -69,7 +69,7 @@ async def get_case_notifications(case_id: str):
 @router.post("/{case_id}/approve")
 async def approve_case(
     case_id: str,
-    req: ApproveRequest,
+    req: ApproveRequest = ApproveRequest(),
     operator_id: str = Depends(require_reviewer),
     db: AsyncSession = Depends(get_db),
 ):
@@ -77,16 +77,18 @@ async def approve_case(
     repo = SqlAlchemyRepository(db)
     case = await repo.get_case(case_id)
     if not case:
-        raise HTTPException(status_code=404, detail="Case not found")
+        raise HTTPException(status_code=404, detail=f"Case '{case_id}' not found")
 
     workflow = orchestrator.create_workflow(repo)
     try:
-        effective_op = req.operator_id or operator_id
+        effective_op = (req.operator_id if req else None) or operator_id or "ops_admin"
         await workflow.handle_human_approval(case, operator_id=effective_op)
         await db.commit()
         return {"status": "approved", "case_id": case_id, "new_status": case.status.value}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Approval execution error: {str(exc)}")
 
 
 @router.post("/{case_id}/reject")
@@ -100,16 +102,18 @@ async def reject_case(
     repo = SqlAlchemyRepository(db)
     case = await repo.get_case(case_id)
     if not case:
-        raise HTTPException(status_code=404, detail="Case not found")
+        raise HTTPException(status_code=404, detail=f"Case '{case_id}' not found")
 
     workflow = orchestrator.create_workflow(repo)
     try:
-        effective_op = req.operator_id or operator_id
+        effective_op = (req.operator_id if req else None) or operator_id or "ops_admin"
         await workflow.handle_human_rejection(case, operator_id=effective_op, reason=req.reason)
         await db.commit()
         return {"status": "rejected", "case_id": case_id, "new_status": case.status.value}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Rejection execution error: {str(exc)}")
 
 
 @router.post("/{case_id}/retry")
@@ -118,7 +122,7 @@ async def retry_case(case_id: str, db: AsyncSession = Depends(get_db)):
     repo = SqlAlchemyRepository(db)
     case = await repo.get_case(case_id)
     if not case:
-        raise HTTPException(status_code=404, detail="Case not found")
+        raise HTTPException(status_code=404, detail=f"Case '{case_id}' not found")
 
     workflow = orchestrator.create_workflow(repo)
     try:
@@ -127,4 +131,5 @@ async def retry_case(case_id: str, db: AsyncSession = Depends(get_db)):
         return {"status": "retried", "case_id": case_id, "new_status": case.status.value}
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
 

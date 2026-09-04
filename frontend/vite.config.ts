@@ -6,20 +6,53 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': {
+      '/copilot': {
         target: 'http://127.0.0.1:8000',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, ''),
+        bypass: (req) => {
+          if (req.headers.accept?.includes('text/html')) {
+            return '/index.html';
+          }
+        },
       },
-      '/copilot': 'http://127.0.0.1:8000',
-      '/voice': 'http://127.0.0.1:8000',
-      '/admin': 'http://127.0.0.1:8000',
-      '/webhooks': 'http://127.0.0.1:8000',
-      '/cases': 'http://127.0.0.1:8000',
-      '/metrics': 'http://127.0.0.1:8000',
-      '/demo': 'http://127.0.0.1:8000',
-      '/health': 'http://127.0.0.1:8000',
+      '/voice': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+        bypass: (req) => {
+          if (req.headers.accept?.includes('text/html')) {
+            return '/index.html';
+          }
+        },
+      },
+      '/cases': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+        bypass: (req) => {
+          if (req.headers.accept?.includes('text/html')) {
+            return '/index.html';
+          }
+        },
+      },
+      '/admin': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+      },
+      '/webhooks': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+      },
+      '/metrics': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+      },
+      '/demo': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+      },
+      '/health': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+      },
     },
   },
 });
-
