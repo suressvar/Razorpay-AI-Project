@@ -1,0 +1,29 @@
+{
+  "entity": "event",
+  "account_id": "acc_test_12345",
+  "event": "subscription.halted",
+  "contains": ["subscription"],
+  "payload": {
+    "subscription": {
+      "entity": {
+        "id": "sub_halted_01",
+        "entity": "subscription",
+        "plan_id": "plan_pro_01",
+        "status": "halted",
+        "current_start": 1756972800,
+        "current_end": 1759564800,
+        "ended_at": null,
+        "quantity": 1,
+        "charge_at": 1756972800,
+        "start_at": 1754380800,
+        "end_at": 1785916800,
+        "auth_attempts": 3,
+        "total_count": 12,
+        "paid_count": 2,
+        "customer_notify": true,
+        "created_at": 1754380800
+      }
+    }
+  },
+  "created_at": 1756972800
+}

@@ -261,14 +261,18 @@ export async function createCopilotPaymentLink(
 }
 
 export async function fetchUnmatchedWebhooks(limit: number = 50, offset: number = 0): Promise<any[]> {
-  const res = await fetch(`${API_BASE}/webhooks/unmatched?limit=${limit}&offset=${offset}`);
-  if (!res.ok) throw new Error('Failed to fetch unmatched webhooks');
+  const res = await fetch(`${API_BASE}/webhooks/unmatched?limit=${limit}&offset=${offset}`, {
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) await handleResponseError(res, 'Failed to fetch unmatched webhooks');
   return res.json();
 }
 
 export async function fetchQueueStats(): Promise<any> {
-  const res = await fetch(`${API_BASE}/webhooks/queue/stats`);
-  if (!res.ok) throw new Error('Failed to fetch queue statistics');
+  const res = await fetch(`${API_BASE}/webhooks/queue/stats`, {
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) await handleResponseError(res, 'Failed to fetch queue statistics');
   return res.json();
 }
 

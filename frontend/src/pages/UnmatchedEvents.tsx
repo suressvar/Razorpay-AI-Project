@@ -62,9 +62,9 @@ export default function UnmatchedEvents() {
 
   const filtered = records.filter(
     (r) =>
-      r.event_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      r.event_type.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      r.reason.toLowerCase().includes(searchTerm.toLowerCase())
+      (r.event_id || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (r.event_type || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (r.reason || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const columns = [

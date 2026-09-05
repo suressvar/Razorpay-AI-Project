@@ -203,3 +203,24 @@ async def test_dead_letter_queue_transition():
 
     stats = await webhook_queue.get_stats()
     assert stats["dead_letter"] >= 1
+
+
+@pytest.mark.asyncio
+async def test_get_unmatched_webhooks_endpoint():
+    """GET /webhooks/unmatched returns 200 and a list of unmatched webhook events."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # Should succeed without auth header
+        resp = await client.get("/webhooks/unmatched")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert isinstance(data, list)
+
+        # Should also succeed with auth header
+        resp_auth = await client.get(
+            "/webhooks/unmatched",
+            headers={"Authorization": "Bearer auth_token_admin_recovery_v1"},
+        )
+        assert resp_auth.status_code == 200
+        assert isinstance(resp_auth.json(), list)
+

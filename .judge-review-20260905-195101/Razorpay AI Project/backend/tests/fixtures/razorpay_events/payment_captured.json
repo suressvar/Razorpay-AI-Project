@@ -1,0 +1,26 @@
+{
+  "entity": "event",
+  "account_id": "acc_test_12345",
+  "event": "payment.captured",
+  "contains": ["payment"],
+  "payload": {
+    "payment": {
+      "entity": {
+        "id": "pay_captured_test_01",
+        "entity": "payment",
+        "amount": 299900,
+        "currency": "INR",
+        "status": "captured",
+        "order_id": "order_test_01",
+        "invoice_id": "inv_test_01",
+        "subscription_id": "sub_test_01",
+        "method": "upi",
+        "captured": true,
+        "email": "customer@synthetic-test.example.com",
+        "contact": "+919800012345",
+        "created_at": 1756976400
+      }
+    }
+  },
+  "created_at": 1756976400
+}

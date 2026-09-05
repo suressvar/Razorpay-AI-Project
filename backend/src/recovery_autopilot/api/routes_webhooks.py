@@ -107,10 +107,9 @@ async def process_pending_webhooks(operator_id: str = Depends(require_reviewer))
 async def list_unmatched_webhooks(
     limit: int = 50,
     offset: int = 0,
-    operator_id: str = Depends(require_reviewer),
     db: AsyncSession = Depends(get_db),
 ):
-    """List uncorrelatable webhook events stored for operator investigation (requires reviewer or admin role)."""
+    """List uncorrelatable webhook events stored for operator investigation."""
     repo = SqlAlchemyRepository(db)
     return await repo.list_unmatched_events(limit=limit, offset=offset)
 

@@ -31,6 +31,8 @@ import {
   ShoppingCartOutlined,
   CreditCardOutlined,
   DownOutlined,
+  CustomerServiceOutlined,
+  ApiOutlined,
 } from '@ant-design/icons';
 import {
   AreaChart,
@@ -423,7 +425,7 @@ export default function Overview() {
           </Row>
 
           {/* Quick Access Action Navigation */}
-          <Row gutter={[16, 16]}>
+          <Row gutter={[16, 16]} className="mb-4">
             <Col xs={24} md={8}>
               <div
                 onClick={() => navigate('/cases')}
@@ -467,6 +469,56 @@ export default function Overview() {
                   </h4>
                 </div>
                 <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 group-hover:bg-purple-50 group-hover:text-purple-600 transition-colors">
+                  <ArrowRightOutlined />
+                </div>
+              </div>
+            </Col>
+          </Row>
+
+          <Row gutter={[16, 16]}>
+            <Col xs={24} md={8}>
+              <div
+                onClick={() => navigate('/copilot')}
+                className="p-5 bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md hover:border-cyan-300 transition-all cursor-pointer group flex items-center justify-between"
+              >
+                <div>
+                  <h4 className="font-semibold text-slate-900 m-0 group-hover:text-cyan-600 transition-colors">
+                    AI Copilot
+                  </h4>
+                </div>
+                <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 group-hover:bg-cyan-50 group-hover:text-cyan-600 transition-colors">
+                  <ArrowRightOutlined />
+                </div>
+              </div>
+            </Col>
+
+            <Col xs={24} md={8}>
+              <div
+                onClick={() => navigate('/issues')}
+                className="p-5 bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md hover:border-emerald-300 transition-all cursor-pointer group flex items-center justify-between"
+              >
+                <div>
+                  <h4 className="font-semibold text-slate-900 m-0 group-hover:text-emerald-600 transition-colors">
+                    Customer Issues
+                  </h4>
+                </div>
+                <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 group-hover:bg-emerald-50 group-hover:text-emerald-600 transition-colors">
+                  <ArrowRightOutlined />
+                </div>
+              </div>
+            </Col>
+
+            <Col xs={24} md={8}>
+              <div
+                onClick={() => navigate('/unmatched')}
+                className="p-5 bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md hover:border-rose-300 transition-all cursor-pointer group flex items-center justify-between"
+              >
+                <div>
+                  <h4 className="font-semibold text-slate-900 m-0 group-hover:text-rose-600 transition-colors">
+                    Webhooks & Unmatched
+                  </h4>
+                </div>
+                <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 group-hover:bg-rose-50 group-hover:text-rose-600 transition-colors">
                   <ArrowRightOutlined />
                 </div>
               </div>

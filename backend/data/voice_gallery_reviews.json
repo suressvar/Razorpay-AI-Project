@@ -134,6 +134,42 @@
       "naturalness_rating": 5,
       "comments": "Excellent Marathi pronunciation of subscription terms.",
       "timestamp": "2026-09-05T13:36:52.080496+00:00"
+    },
+    {
+      "item_id": "gallery_te_01",
+      "evaluator_name": "Venkatesh Babu (Telugu Evaluator)",
+      "native_speaker": true,
+      "intelligibility_rating": 5,
+      "naturalness_rating": 4,
+      "comments": "Very natural tone for Telugu debt collection call.",
+      "timestamp": "2026-09-05T14:21:47.774740+00:00"
+    },
+    {
+      "item_id": "gallery_mr_01",
+      "evaluator_name": "Pooja Patil (Marathi Evaluator)",
+      "native_speaker": true,
+      "intelligibility_rating": 5,
+      "naturalness_rating": 5,
+      "comments": "Excellent Marathi pronunciation of subscription terms.",
+      "timestamp": "2026-09-05T14:21:47.894638+00:00"
+    },
+    {
+      "item_id": "gallery_te_01",
+      "evaluator_name": "Venkatesh Babu (Telugu Evaluator)",
+      "native_speaker": true,
+      "intelligibility_rating": 5,
+      "naturalness_rating": 4,
+      "comments": "Very natural tone for Telugu debt collection call.",
+      "timestamp": "2026-09-05T14:29:02.558223+00:00"
+    },
+    {
+      "item_id": "gallery_mr_01",
+      "evaluator_name": "Pooja Patil (Marathi Evaluator)",
+      "native_speaker": true,
+      "intelligibility_rating": 5,
+      "naturalness_rating": 5,
+      "comments": "Excellent Marathi pronunciation of subscription terms.",
+      "timestamp": "2026-09-05T14:29:02.705241+00:00"
     }
   ]
 }
