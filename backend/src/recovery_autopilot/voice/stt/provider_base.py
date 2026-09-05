@@ -34,6 +34,7 @@ class STTResult(BaseModel):
     model_profile: STTModelProfile = STTModelProfile.BALANCED
     model_name: str = "local-multilingual-v2"
     audio_duration_sec: float = 0.0
+    is_mock: bool = False
 
 
 class STTProvider(abc.ABC):

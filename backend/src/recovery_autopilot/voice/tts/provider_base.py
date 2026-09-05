@@ -32,9 +32,11 @@ class VoiceProfile:
     locale: str
     gender: VoiceGender = VoiceGender.FEMALE
     sample_rate: int = 24000
-    naturalness_score: float = 4.8
+    naturalness_score: Optional[float] = None
+    quality_rating: str = "Not measured"
     description: str = ""
     is_native: bool = True
+    is_mock: bool = False
 
 
 @dataclass

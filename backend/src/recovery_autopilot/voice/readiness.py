@@ -80,22 +80,30 @@ class VoiceReadinessChecker:
             stt_start = time.perf_counter()
             warmed = await self.stt_provider.warmup(STTModelProfile.BALANCED)
             stt_warmup_ms = round((time.perf_counter() - stt_start) * 1000.0, 2)
+            is_mock_stt = getattr(self.stt_provider, "is_mock", False)
             checks.append({
                 "category": "speech_to_text",
-                "name": "Local Indic STT Engine Warmup",
+                "name": "Speech Recognition Engine (STT)",
                 "passed": warmed,
-                "details": f"Warmed 7 Indian language acoustic tables & 6 code-switched tokenizers in {stt_warmup_ms} ms.",
-                "metric": f"{stt_warmup_ms} ms",
+                "is_mock": is_mock_stt,
+                "details": (
+                    f"Synthetic Mock STT engine initialized in {stt_warmup_ms} ms. Note: Neural ASR weights are not loaded; fixed mock transcripts active."
+                    if is_mock_stt else
+                    f"Warmed Indic speech recognition tables in {stt_warmup_ms} ms."
+                ),
+                "metric": f"{stt_warmup_ms} ms (Mock Mode)" if is_mock_stt else f"{stt_warmup_ms} ms",
+                "missing_dependency": "Local neural speech recognition weights not downloaded" if is_mock_stt else None,
             })
             if not warmed:
                 overall_ready = False
         except Exception as exc:
             checks.append({
                 "category": "speech_to_text",
-                "name": "Local Indic STT Engine Warmup",
+                "name": "Speech Recognition Engine (STT)",
                 "passed": False,
                 "details": f"STT warmup exception: {str(exc)}",
                 "metric": "Failed",
+                "missing_dependency": "STT initialization failed",
             })
             overall_ready = False
 
@@ -116,22 +124,30 @@ class VoiceReadinessChecker:
 
             tts_total_ms = round((time.perf_counter() - tts_start) * 1000.0, 2)
             tts_ok = voices_tested == len(VOICE_REGISTRY)
+            is_mock_tts = getattr(self.tts_provider, "is_mock", False)
             checks.append({
                 "category": "text_to_speech",
-                "name": "Multilingual Formant & Acoustic Voices",
+                "name": "Speech Synthesis Engine (TTS)",
                 "passed": tts_ok,
-                "details": f"Verified {voices_tested}/{len(VOICE_REGISTRY)} regional voices (WAV RIFF 24kHz) in {tts_total_ms} ms.",
-                "metric": f"{voices_tested} voices ready",
+                "is_mock": is_mock_tts,
+                "details": (
+                    f"Verified {voices_tested}/{len(VOICE_REGISTRY)} regional acoustic tone profiles (RIFF WAV 24kHz) in {tts_total_ms} ms. Note: Mathematical tone generator; neural speech voices not loaded."
+                    if is_mock_tts else
+                    f"Verified {voices_tested}/{len(VOICE_REGISTRY)} regional neural voices in {tts_total_ms} ms."
+                ),
+                "metric": f"{voices_tested} tone profiles" if is_mock_tts else f"{voices_tested} voices ready",
+                "missing_dependency": "Neural TTS model weights not configured" if is_mock_tts else None,
             })
             if not tts_ok:
                 overall_ready = False
         except Exception as exc:
             checks.append({
                 "category": "text_to_speech",
-                "name": "Multilingual Formant & Acoustic Voices",
+                "name": "Speech Synthesis Engine (TTS)",
                 "passed": False,
                 "details": f"TTS synthesis check error: {str(exc)}",
                 "metric": "Failed",
+                "missing_dependency": "TTS initialization failed",
             })
             overall_ready = False
 
@@ -183,11 +199,13 @@ class VoiceReadinessChecker:
         })
 
         total_audit_time_ms = round((time.perf_counter() - start_t) * 1000.0, 2)
+        has_mocks = getattr(self.stt_provider, "is_mock", False) or getattr(self.tts_provider, "is_mock", False)
 
         return {
             "is_ready": overall_ready,
-            "readiness_score": 100.0 if overall_ready else 75.0,
-            "demo_mode": "Reliability Pre-flight Active",
+            "readiness_score": 85.0 if (overall_ready and has_mocks) else (100.0 if overall_ready else 50.0),
+            "demo_mode": "Synthetic Mock & Mathematical Tone Pipeline Active" if has_mocks else "Genuine Neural Pipeline Active",
+            "is_neural_ready": not has_mocks,
             "audit_latency_ms": total_audit_time_ms,
             "supported_languages": [
                 {"code": "en-IN", "name": "English", "native": "English", "voice": "en-IN-priya"},
@@ -199,5 +217,9 @@ class VoiceReadinessChecker:
                 {"code": "bn-IN", "name": "Bengali", "native": "বাংলা", "voice": "bn-IN-shreya"},
             ],
             "checks": checks,
-            "summary": "All local voice models, Indic tokenizers, speech renderers, and deterministic safety locks are pre-warmed and ready for live Buildathon evaluation." if overall_ready else "One or more pre-flight checks failed. Please review details above.",
+            "summary": (
+                "System is operational in Synthetic Mock & Mathematical Tone Mode. Speech recognition and synthesis run on simulated/tone models. Genuine neural speech requires downloaded weights."
+                if has_mocks else
+                "All local voice models, Indic tokenizers, speech renderers, and deterministic safety locks are pre-warmed and ready."
+            ),
         }

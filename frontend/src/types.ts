@@ -176,7 +176,7 @@ export interface FollowUpSuggestion {
   id: string;
   number?: number;
   text: string;
-  action: 'CREATE_PAYMENT_LINK' | 'INFO_QUERY' | 'ANALYZE_ALL' | 'HELP_PAYMENT_LINK' | 'SEARCH_EMAIL';
+  action: 'CREATE_PAYMENT_LINK' | 'INFO_QUERY' | 'ANALYZE_ALL' | 'HELP_PAYMENT_LINK' | 'SEARCH_EMAIL' | 'DRAFT_EMAIL' | 'VIEW_ISSUE';
   case_id?: string;
 }
 
@@ -527,11 +527,11 @@ export interface TTSBenchmarkSample {
   duration_sec: number;
   audio_base64: string;
   scores: {
-    pronunciation: number;
-    intelligibility: number;
-    naturalness: number;
-    pace: number;
-    language_correctness: number;
+    pronunciation: number | string;
+    intelligibility: number | string;
+    naturalness: number | string;
+    pace: number | string;
+    language_correctness: number | string;
   };
 }
 
@@ -543,11 +543,13 @@ export interface TTSBenchmarkResponse {
   available_voices: TTSVoiceProfile[];
   sample_gallery: TTSBenchmarkSample[];
   metrics: {
-    overall_pronunciation_score: number;
-    intelligibility_score: number;
-    naturalness_score: number;
-    pace_score: number;
+    overall_pronunciation_score: number | string;
+    intelligibility_score: number | string;
+    naturalness_score: number | string;
+    pace_score: number | string;
     zero_credential_leak_rate: number;
+    is_synthetic_mock?: boolean;
+    note?: string;
   };
 }
 
@@ -557,6 +559,8 @@ export interface VoiceReadinessCheckItem {
   passed: boolean;
   details: string;
   metric: string;
+  is_mock?: boolean;
+  missing_dependency?: string | null;
 }
 
 export interface VoiceReadinessReport {
@@ -572,5 +576,167 @@ export interface VoiceReadinessReport {
   }>;
   checks: VoiceReadinessCheckItem[];
   summary: string;
+}
+
+// --- Copilot V2 Issue Tracking & Investigation Types ---
+
+export type IssueStatus =
+  | 'NEW'
+  | 'INVESTIGATING'
+  | 'AWAITING_INFO'
+  | 'ACTION_IN_PROGRESS'
+  | 'MONITORING'
+  | 'RESOLVED'
+  | 'CLOSED';
+
+export type IssueSeverity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
+
+export interface IssueEvidence {
+  evidence_id: string;
+  source: string;
+  description: string;
+  raw_data?: any;
+  confidence: 'HIGH' | 'MEDIUM' | 'LOW';
+  timestamp?: string;
+}
+
+export interface IssueCause {
+  cause_id: string;
+  description: string;
+  confidence: 'HIGH' | 'MEDIUM' | 'LOW';
+  supporting_evidence?: string[];
+  contradicting_evidence?: string[];
+  missing_evidence?: string[];
+  recommended_action?: string | null;
+  is_confirmed?: boolean;
+}
+
+export interface IssueAction {
+  action_id: string;
+  action_type: string;
+  description: string;
+  status: 'PENDING' | 'COMPLETED' | 'FAILED' | 'APPROVAL_REQUIRED';
+  result?: any;
+  error_message?: string | null;
+  requires_approval: boolean;
+  executed_by: string;
+  executed_at?: string | null;
+  created_at?: string;
+}
+
+export interface IssueCommunication {
+  communication_id: string;
+  channel: 'EMAIL' | 'SMS' | 'WHATSAPP';
+  direction: 'inbound' | 'outbound';
+  recipient: string;
+  subject?: string | null;
+  body: string;
+  template_used?: string | null;
+  provider_message_id?: string | null;
+  status: 'DRAFT' | 'QUEUED' | 'ACCEPTED' | 'DELIVERED' | 'FAILED';
+  idempotency_key?: string | null;
+  sent_at?: string | null;
+  created_at?: string;
+}
+
+export interface IssueTimelineEntry {
+  entry_id: string;
+  timestamp: string;
+  event_type: string;
+  actor: string;
+  summary: string;
+  details?: any;
+}
+
+export interface CustomerIssue {
+  issue_id: string;
+  title: string;
+  category: string;
+  severity: IssueSeverity;
+  status: IssueStatus;
+  environment: 'TEST' | 'LIVE';
+  merchant_id?: string | null;
+  customer_id?: string | null;
+  customer_name?: string | null;
+  customer_email?: string | null;
+  payment_id?: string | null;
+  order_id?: string | null;
+  refund_id?: string | null;
+  payment_link_id?: string | null;
+  case_id?: string | null;
+  owner?: string | null;
+  sla_deadline?: string | null;
+  next_action?: string | null;
+  reported_symptoms?: string | null;
+  expected_behavior?: string | null;
+  actual_behavior?: string | null;
+  evidence: IssueEvidence[];
+  possible_causes: IssueCause[];
+  actions: IssueAction[];
+  communications: IssueCommunication[];
+  timeline: IssueTimelineEntry[];
+  resolution_summary?: string | null;
+  resolution_verified: boolean;
+  resolution_evidence?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EmailDraft {
+  draft_id: string;
+  issue_id?: string | null;
+  case_id?: string | null;
+  template_id?: string | null;
+  recipient_email: string;
+  recipient_name?: string | null;
+  subject: string;
+  body_html: string;
+  body_text: string;
+  status: 'DRAFT' | 'QUEUED' | 'ACCEPTED' | 'DELIVERED' | 'FAILED';
+  provider_message_id?: string | null;
+  sent_at?: string | null;
+  error_message?: string | null;
+  created_by?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface CopilotV2Investigation {
+  type: string;
+  issue_id: string;
+  case_id?: string;
+  steps: Array<{
+    step: string;
+    step_type?: string;
+    title?: string;
+    description?: string;
+    status: string;
+    details?: any;
+    duration_ms?: number;
+  }>;
+  what_happened: {
+    headline: string;
+    explanation: string;
+    auto_reversal_timeline?: string;
+    timeline: Array<{
+      timestamp?: string | null;
+      event: string;
+      details: string;
+    }>;
+  };
+  verified_evidence: IssueEvidence[];
+  possible_causes: IssueCause[];
+  recommended_solution: {
+    resolution_name: string;
+    resolution_instruction: string;
+    recommendation: string;
+  };
+  available_actions: Array<{
+    action: string;
+    label: string;
+    enabled: boolean;
+    requires_approval: boolean;
+  }>;
+  diagnosis: any;
 }
 

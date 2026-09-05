@@ -25,27 +25,31 @@ logger = logging.getLogger("recovery_autopilot.voice.stt.local_provider")
 
 class LocalMultilingualSTTProvider(STTProvider):
     """
-    Local Multilingual STT engine supporting fast CPU execution,
+    Local Multilingual STT engine mock supporting fast CPU execution,
     in-memory warming, PCM audio validation, and rich transcript metadata.
+    NOTE: This is a synthetic mock provider for development and offline testing.
     """
+
+    is_mock = True
+    is_synthetic = True
 
     MODEL_CONFIGS = {
         STTModelProfile.FAST: {
-            "model_name": "multilingual-stt-tiny-in",
+            "model_name": "multilingual-stt-tiny-in (Mock)",
             "device": "cpu",
             "compute_type": "int8",
             "memory_mb": 140,
             "target_latency_ms": 180,
         },
         STTModelProfile.BALANCED: {
-            "model_name": "multilingual-stt-base-in",
+            "model_name": "multilingual-stt-base-in (Mock)",
             "device": "cpu",
             "compute_type": "int8",
             "memory_mb": 290,
             "target_latency_ms": 320,
         },
         STTModelProfile.ACCURATE: {
-            "model_name": "multilingual-stt-small-in",
+            "model_name": "multilingual-stt-small-in (Mock)",
             "device": "cpu",
             "compute_type": "float16",
             "memory_mb": 580,
@@ -62,6 +66,8 @@ class LocalMultilingualSTTProvider(STTProvider):
         cfg = self.MODEL_CONFIGS[self._loaded_profile]
         return {
             "provider": "LocalMultilingualSTTProvider",
+            "is_mock": True,
+            "engine_type": "synthetic_mock",
             "active_profile": self._loaded_profile.value,
             "model_name": cfg["model_name"],
             "device": cfg["device"],
@@ -71,6 +77,7 @@ class LocalMultilingualSTTProvider(STTProvider):
                 "en-IN", "hi-IN", "kn-IN", "ta-IN", "te-IN", "mr-IN", "bn-IN",
                 "hinglish", "kanglish", "tanglish", "tenglish",
             ],
+            "note": "Synthetic mock STT engine for test pipeline; neural weights not loaded.",
         }
 
     async def warmup(self, profile: STTModelProfile = STTModelProfile.BALANCED) -> bool:
@@ -201,4 +208,5 @@ class LocalMultilingualSTTProvider(STTProvider):
             model_profile=profile,
             model_name=cfg["model_name"],
             audio_duration_sec=round(audio_info["duration_sec"], 2),
+            is_mock=True,
         )

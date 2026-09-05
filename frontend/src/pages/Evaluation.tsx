@@ -44,6 +44,12 @@ function fmtInr(n: number) {
   return `₹${new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(n)}`;
 }
 
+function formatPct(val: number | undefined | null) {
+  if (val === undefined || val === null || isNaN(val)) return '0.0%';
+  const num = val <= 1 && val > 0 ? val * 100 : val;
+  return `${num.toFixed(1)}%`;
+}
+
 export default function Evaluation() {
   const [report, setReport] = useState<BenchmarkReport | null>(null);
   const [loading, setLoading] = useState(false);
@@ -85,7 +91,7 @@ export default function Evaluation() {
       key: 'agent_rate',
       render: (_, r) => (
         <span className="font-bold text-blue-600">
-          {(r.agent_recovery_rate * 100).toFixed(1)}% ({r.agent_recovered_count})
+          {formatPct(r.agent_recovery_rate)} ({r.agent_recovered_count})
         </span>
       ),
     },
@@ -94,7 +100,7 @@ export default function Evaluation() {
       key: 'baseline_rate',
       render: (_, r) => (
         <span className="text-slate-500">
-          {(r.baseline_recovery_rate * 100).toFixed(1)}% ({r.baseline_recovered_count})
+          {formatPct(r.baseline_recovery_rate)} ({r.baseline_recovered_count})
         </span>
       ),
     },
@@ -102,10 +108,10 @@ export default function Evaluation() {
       title: 'Incremental Lift',
       key: 'lift',
       render: (_, r) => {
-        const lift = (r.agent_recovery_rate - r.baseline_recovery_rate) * 100;
+        const lift = r.incremental_rate_pct !== undefined ? r.incremental_rate_pct : (r.agent_recovery_rate - r.baseline_recovery_rate);
         return (
           <Tag color="success" className="font-bold">
-            +{lift.toFixed(1)}%
+            +{formatPct(lift)}
           </Tag>
         );
       },
@@ -127,9 +133,9 @@ export default function Evaluation() {
   ];
 
   const chartData = report?.category_breakdown?.map((c) => ({
-    category: c.category.replace(/_/g, ' ').substring(0, 14),
-    AI: Math.round(c.agent_recovery_rate * 100),
-    Baseline: Math.round(c.baseline_recovery_rate * 100),
+    category: (c.category || '').replace(/_/g, ' ').substring(0, 14),
+    AI: Math.round(c.agent_recovery_rate <= 1 ? c.agent_recovery_rate * 100 : c.agent_recovery_rate),
+    Baseline: Math.round(c.baseline_recovery_rate <= 1 ? c.baseline_recovery_rate * 100 : c.baseline_recovery_rate),
   })) || [];
 
   return (
@@ -137,6 +143,21 @@ export default function Evaluation() {
       <PageHeader
         title="AI Evaluation & Benchmark Lab"
       />
+
+      {/* Explicit Simulation Disclosure Banner */}
+      <div className="p-3.5 mb-5 bg-purple-50 border border-purple-200 rounded-xl flex items-center justify-between text-xs">
+        <div className="flex items-center gap-2.5">
+          <Tag color="purple" className="font-bold uppercase tracking-wider">
+            Synthetic Benchmark Simulation
+          </Tag>
+          <span className="text-purple-900 font-medium">
+            Simulated evaluation running on randomized synthetic failure distributions. Does not execute real customer communications or live transactions.
+          </span>
+        </div>
+        <Tag color="default" className="text-[11px] font-mono">
+          Environment: Offline Simulator
+        </Tag>
+      </div>
 
       {/* Benchmark Controls Card */}
       <Card className="mb-6">
@@ -182,7 +203,10 @@ export default function Evaluation() {
                 <SafetyCertificateFilled />
               </div>
               <div>
-                <h4 className="text-emerald-950 font-bold m-0">Zero Guardrail Violations Certificate</h4>
+                <h4 className="text-emerald-950 font-bold m-0">Zero Guardrail Violations (Simulated Check)</h4>
+                <div className="text-xs text-emerald-800 mt-0.5">
+                  Evaluated against deterministic policy guardrails across all {size} generated test scenarios.
+                </div>
               </div>
             </div>
             <Tag color="success" className="font-bold px-3 py-1 text-xs">
@@ -195,16 +219,16 @@ export default function Evaluation() {
             <Col xs={24} sm={12} lg={6}>
               <div className="p-5 bg-white border border-slate-200 rounded-xl shadow-sm">
                 <Text type="secondary" className="text-xs uppercase font-bold tracking-wider text-slate-500">
-                  Recovery Rate
+                  Simulated Recovery Rate
                 </Text>
                 <div className="flex items-baseline gap-2 mt-2">
                   <span className="text-2xl font-bold text-blue-600">
-                    {(report.agent_recovery_rate * 100).toFixed(1)}%
+                    {formatPct(report.agent_recovery_rate)}
                   </span>
-                  <span className="text-xs text-slate-400">vs {(report.baseline_recovery_rate * 100).toFixed(1)}%</span>
+                  <span className="text-xs text-slate-400">vs {formatPct(report.baseline_recovery_rate)}</span>
                 </div>
                 <div className="mt-2 text-xs font-bold text-emerald-600 flex items-center gap-1">
-                  <ArrowUpOutlined /> +{(report.incremental_recovery_rate_pct).toFixed(1)}% Lift
+                  <ArrowUpOutlined /> +{formatPct(report.incremental_recovery_rate_pct)} Lift
                 </div>
               </div>
             </Col>
@@ -212,7 +236,7 @@ export default function Evaluation() {
             <Col xs={24} sm={12} lg={6}>
               <div className="p-5 bg-white border border-slate-200 rounded-xl shadow-sm">
                 <Text type="secondary" className="text-xs uppercase font-bold tracking-wider text-slate-500">
-                  Incremental Revenue
+                  Simulated Incremental Revenue
                 </Text>
                 <div className="flex items-baseline gap-2 mt-2">
                   <span className="text-2xl font-bold text-emerald-600">
@@ -220,7 +244,7 @@ export default function Evaluation() {
                   </span>
                 </div>
                 <div className="mt-2 text-xs font-medium text-slate-500">
-                  Total AI: {fmtInr(report.agent_total_inr_recovered)}
+                  Modeled Total: {fmtInr(report.agent_total_inr_recovered)}
                 </div>
               </div>
             </Col>

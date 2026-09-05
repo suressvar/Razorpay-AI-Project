@@ -296,7 +296,7 @@ export const VoiceLabModal: React.FC<VoiceLabModalProps> = ({
                     <span>Demo Reliability Pre-Flight Health</span>
                   </div>
                   <h3 className="text-2xl font-black text-white">
-                    {readiness?.is_ready ? '100% Operational & Pre-Warmed' : 'Pre-Flight Verification in Progress'}
+                    {readiness?.demo_mode || (readiness?.is_ready ? 'Voice Pipeline Active' : 'Pre-Flight Verification in Progress')}
                   </h3>
                   <p className="text-xs text-slate-400 max-w-xl">
                     {readiness?.summary || 'Preloading STT/TTS weights, checking system memory, and locking safety policies.'}
@@ -307,7 +307,7 @@ export const VoiceLabModal: React.FC<VoiceLabModalProps> = ({
                   <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 text-center min-w-[120px]">
                     <div className="text-[11px] text-slate-400">Readiness Score</div>
                     <div className="text-2xl font-black text-emerald-400">
-                      {readiness?.readiness_score || 100}%
+                      {readiness?.readiness_score || 85}%
                     </div>
                   </div>
                   <button
@@ -333,7 +333,9 @@ export const VoiceLabModal: React.FC<VoiceLabModalProps> = ({
                       <span
                         className={`text-xs px-2 py-0.5 rounded font-mono font-bold ${
                           check.passed
-                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                            ? check.is_mock
+                              ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                              : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
                             : 'bg-red-500/20 text-red-400 border border-red-500/30'
                         }`}
                       >
@@ -341,6 +343,12 @@ export const VoiceLabModal: React.FC<VoiceLabModalProps> = ({
                       </span>
                     </div>
                     <p className="text-xs text-slate-400 leading-relaxed">{check.details}</p>
+                    {check.missing_dependency && (
+                      <div className="text-[11px] text-amber-300 bg-amber-950/40 border border-amber-900/50 rounded px-2.5 py-1 flex items-center gap-1.5">
+                        <WarningFilled className="text-amber-400 text-xs shrink-0" />
+                        <span>Dependency: {check.missing_dependency}</span>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { Layout, Menu, ConfigProvider, Tag, Typography, Space, Select, Switch } from 'antd';
 import {
@@ -11,8 +11,12 @@ import {
   DatabaseOutlined,
   SettingOutlined,
   CheckCircleFilled,
+  CustomerServiceOutlined,
+  WarningFilled,
 } from '@ant-design/icons';
 import { RazorpayLogo } from './components/RazorpayLogo';
+import { RazorpayRouteLoader } from './components/RazorpayLoader';
+import { fetchAdminStatus } from './api';
 import Overview from './pages/Overview';
 import Cases from './pages/Cases';
 import CaseDetail from './pages/CaseDetail';
@@ -21,9 +25,9 @@ import Evaluation from './pages/Evaluation';
 import Copilot from './pages/Copilot';
 import UnmatchedEvents from './pages/UnmatchedEvents';
 import AccountSettings from './pages/AccountSettings';
-
-import { PlayCircleOutlined } from '@ant-design/icons';
-import InteractiveDemoTour from './components/InteractiveDemoTour';
+import CustomerIssues from './pages/CustomerIssues';
+import IssueDetail from './pages/IssueDetail';
+import EmailCompose from './pages/EmailCompose';
 
 const { Header, Content, Sider } = Layout;
 const { Text } = Typography;
@@ -32,13 +36,20 @@ export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
   const [dataMode, setDataMode] = useState<string>('live');
-  const [isTourOpen, setIsTourOpen] = useState<boolean>(false);
+  const [adminStatus, setAdminStatus] = useState<any>(null);
+
+  useEffect(() => {
+    fetchAdminStatus()
+      .then((st) => setAdminStatus(st))
+      .catch(() => setAdminStatus(null));
+  }, [location.pathname]);
 
   // Determine active menu item
   const getSelectedKey = () => {
     const path = location.pathname;
     if (path === '/') return 'overview';
     if (path.startsWith('/copilot')) return 'copilot';
+    if (path.startsWith('/issues')) return 'issues';
     if (path.startsWith('/cases')) return 'cases';
     if (path.startsWith('/review')) return 'review';
     if (path.startsWith('/unmatched')) return 'unmatched';
@@ -59,6 +70,12 @@ export default function App() {
       icon: <RobotOutlined style={{ fontSize: 16 }} />,
       label: 'AI Copilot',
       onClick: () => navigate('/copilot'),
+    },
+    {
+      key: 'issues',
+      icon: <CustomerServiceOutlined style={{ fontSize: 16 }} />,
+      label: 'Customer Issues',
+      onClick: () => navigate('/issues'),
     },
     {
       key: 'cases',
@@ -122,6 +139,9 @@ export default function App() {
         },
       }}
     >
+      {/* Top Route Transition Glowing Progress Indicator */}
+      <RazorpayRouteLoader />
+
       <Layout style={{ minHeight: '100vh', background: '#f4f6f8' }}>
         {/* Fixed Enterprise Sidebar */}
         <Sider
@@ -220,7 +240,7 @@ export default function App() {
                   style={{ width: 175 }}
                   bordered={false}
                   options={[
-                    { value: 'live', label: '⚡ Live Cases' },
+                    { value: 'live', label: '📂 Operational Cases (DB)' },
                     { value: 'benchmark', label: '🧪 Synthetic Benchmark' },
                     { value: 'razorpay_test', label: '💳 Razorpay Test Mode' },
                   ]}
@@ -229,7 +249,7 @@ export default function App() {
 
               {dataMode === 'benchmark' ? (
                 <Tag color="purple" style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4 }}>
-                  SIMULATED DATA
+                  SYNTHETIC SIMULATION
                 </Tag>
               ) : dataMode === 'razorpay_test' ? (
                 <Tag color="cyan" style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4 }}>
@@ -237,34 +257,40 @@ export default function App() {
                 </Tag>
               ) : (
                 <Tag color="geekblue" style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4 }}>
-                  DATABASE CASES
+                  OPERATIONAL DATABASE
                 </Tag>
               )}
             </div>
 
             <Space size="middle">
-              <button
-                onClick={() => setIsTourOpen(true)}
-                className="flex items-center gap-2 px-3.5 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-lg text-xs font-bold shadow-md shadow-blue-500/20 transition cursor-pointer select-none"
-                id="header-live-tour-btn"
-              >
-                <PlayCircleOutlined className="text-sm animate-pulse" />
-                <span>⚡ Live Demo Tour (5-Step)</span>
-              </button>
-
-              <div className="flex items-center gap-2 px-3 py-1 bg-emerald-50 border border-emerald-200 rounded-md">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-                <span className="text-xs font-semibold text-emerald-800">AI Agent Active</span>
-              </div>
+              {adminStatus?.kill_switch_active ? (
+                <div className="flex items-center gap-2 px-3 py-1 bg-red-50 border border-red-200 rounded-md">
+                  <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                  <span className="text-xs font-semibold text-red-800">Kill-Switch Active (Blocked)</span>
+                </div>
+              ) : adminStatus?.execution_mode === 'razorpay_test' ? (
+                <div className="flex items-center gap-2 px-3 py-1 bg-emerald-50 border border-emerald-200 rounded-md">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                  <span className="text-xs font-semibold text-emerald-800">Razorpay Test Mode Active</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 px-3 py-1 bg-blue-50 border border-blue-200 rounded-md">
+                  <span className="w-2 h-2 rounded-full bg-blue-500" />
+                  <span className="text-xs font-semibold text-blue-800">Synthetic Simulation Mode</span>
+                </div>
+              )}
             </Space>
           </Header>
 
           {/* Page Content */}
           <Content style={{ padding: '24px 28px', minHeight: 'calc(100vh - 60px)' }}>
-            <InteractiveDemoTour open={isTourOpen} onClose={() => setIsTourOpen(false)} />
             <Routes>
               <Route path="/" element={<Overview />} />
               <Route path="/copilot" element={<Copilot />} />
+              <Route path="/issues" element={<CustomerIssues />} />
+              <Route path="/issues/:issueId" element={<IssueDetail />} />
+              <Route path="/email/compose" element={<EmailCompose />} />
+              <Route path="/email/compose/:draftId" element={<EmailCompose />} />
               <Route path="/cases" element={<Cases />} />
               <Route path="/cases/:caseId" element={<CaseDetail />} />
               <Route path="/review" element={<HumanReview />} />

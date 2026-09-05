@@ -322,12 +322,13 @@ class PronunciationBenchmarkRunner:
                 "rendered_text": rendered,
                 "duration_sec": audio_res.duration_sec,
                 "audio_base64": audio_res.audio_base64,
+                "is_mock": True,
                 "scores": {
-                    "pronunciation": 4.9,
-                    "intelligibility": 4.85,
-                    "naturalness": 4.8,
-                    "pace": 4.9,
-                    "language_correctness": 5.0,
+                    "pronunciation": "Not measured",
+                    "intelligibility": "Not measured",
+                    "naturalness": "Not measured",
+                    "pace": "Not measured",
+                    "language_correctness": "Not measured",
                 }
             })
 
@@ -350,10 +351,12 @@ class PronunciationBenchmarkRunner:
             "sample_gallery": sample_audio_gallery,
             "test_results": results,
             "metrics": {
-                "overall_pronunciation_score": 4.88,
-                "intelligibility_score": 4.85,
-                "naturalness_score": 4.82,
-                "pace_score": 4.90,
+                "overall_pronunciation_score": "Not measured",
+                "intelligibility_score": "Not measured",
+                "naturalness_score": "Not measured",
+                "pace_score": "Not measured",
                 "zero_credential_leak_rate": 100.0,
+                "is_synthetic_mock": True,
+                "note": "Mathematical tone generator; naturalness and intelligibility not measured by human panel.",
             }
         }

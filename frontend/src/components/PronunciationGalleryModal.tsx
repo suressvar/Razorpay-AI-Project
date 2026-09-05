@@ -171,20 +171,20 @@ export const PronunciationGalleryModal: React.FC<PronunciationGalleryModalProps>
             <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3">
               <div className="text-slate-400 mb-1">Pronunciation Score</div>
               <div className="text-lg font-bold text-cyan-400 flex items-center space-x-1">
-                <span>{data.metrics.overall_pronunciation_score} / 5.0</span>
-                <StarFilled className="text-amber-400 text-sm" />
+                <span>{data.metrics.overall_pronunciation_score}{typeof data.metrics.overall_pronunciation_score === 'number' ? ' / 5.0' : ''}</span>
+                {typeof data.metrics.overall_pronunciation_score === 'number' && <StarFilled className="text-amber-400 text-sm" />}
               </div>
             </div>
             <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3">
               <div className="text-slate-400 mb-1">Intelligibility</div>
               <div className="text-lg font-bold text-emerald-400">
-                {data.metrics.intelligibility_score} / 5.0
+                {data.metrics.intelligibility_score}{typeof data.metrics.intelligibility_score === 'number' ? ' / 5.0' : ''}
               </div>
             </div>
             <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3">
               <div className="text-slate-400 mb-1">Naturalness & Pace</div>
               <div className="text-lg font-bold text-indigo-400">
-                {data.metrics.naturalness_score} / 5.0
+                {data.metrics.naturalness_score}{typeof data.metrics.naturalness_score === 'number' ? ' / 5.0' : ''}
               </div>
             </div>
             <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3">
@@ -326,16 +326,16 @@ export const PronunciationGalleryModal: React.FC<PronunciationGalleryModalProps>
                 <div className="flex flex-wrap items-center justify-between pt-2 border-t border-slate-800/60 text-xs gap-3">
                   <div className="flex flex-wrap items-center gap-4 text-slate-400">
                     <div>
-                      Pronunciation: <span className="font-bold text-slate-200">{sample.scores.pronunciation}</span>/5
+                      Pronunciation: <span className="font-bold text-slate-200">{sample.scores.pronunciation}</span>{typeof sample.scores.pronunciation === 'number' ? '/5' : ''}
                     </div>
                     <div>
-                      Intelligibility: <span className="font-bold text-slate-200">{sample.scores.intelligibility}</span>/5
+                      Intelligibility: <span className="font-bold text-slate-200">{sample.scores.intelligibility}</span>{typeof sample.scores.intelligibility === 'number' ? '/5' : ''}
                     </div>
                     <div>
-                      Naturalness: <span className="font-bold text-slate-200">{sample.scores.naturalness}</span>/5
+                      Naturalness: <span className="font-bold text-slate-200">{sample.scores.naturalness}</span>{typeof sample.scores.naturalness === 'number' ? '/5' : ''}
                     </div>
                     <div>
-                      Language Correctness: <span className="font-bold text-emerald-400">{sample.scores.language_correctness}</span>/5
+                      Language Correctness: <span className="font-bold text-emerald-400">{sample.scores.language_correctness}</span>{typeof sample.scores.language_correctness === 'number' ? '/5' : ''}
                     </div>
                   </div>
 

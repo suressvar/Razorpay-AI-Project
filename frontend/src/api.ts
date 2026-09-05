@@ -55,25 +55,41 @@ export async function fetchCases(
   if (category && category !== 'ALL') params.append('category', category);
   params.append('limit', limit.toString());
 
-  const res = await fetch(`${API_BASE}/cases?${params.toString()}`);
+  const res = await fetch(`${API_BASE}/cases?${params.toString()}`, {
+    headers: {
+      'Accept': 'application/json',
+    },
+  });
   if (!res.ok) await handleResponseError(res, 'Failed to fetch cases');
   return res.json();
 }
 
 export async function fetchCaseDetail(caseId: string): Promise<PaymentCase> {
-  const res = await fetch(`${API_BASE}/cases/${caseId}`);
+  const res = await fetch(`${API_BASE}/cases/${caseId}`, {
+    headers: {
+      'Accept': 'application/json',
+    },
+  });
   if (!res.ok) await handleResponseError(res, 'Failed to fetch case details');
   return res.json();
 }
 
 export async function fetchCaseAudit(caseId: string): Promise<AuditEvent[]> {
-  const res = await fetch(`${API_BASE}/cases/${caseId}/audit`);
+  const res = await fetch(`${API_BASE}/cases/${caseId}/audit`, {
+    headers: {
+      'Accept': 'application/json',
+    },
+  });
   if (!res.ok) await handleResponseError(res, 'Failed to fetch case audit trail');
   return res.json();
 }
 
 export async function fetchCaseNotifications(caseId: string): Promise<NotificationPreview[]> {
-  const res = await fetch(`${API_BASE}/cases/${caseId}/notifications`);
+  const res = await fetch(`${API_BASE}/cases/${caseId}/notifications`, {
+    headers: {
+      'Accept': 'application/json',
+    },
+  });
   if (!res.ok) await handleResponseError(res, 'Failed to fetch case notifications');
   return res.json();
 }
@@ -517,6 +533,236 @@ export async function fetchVoiceReadiness(): Promise<import('./types').VoiceRead
   return res.json();
 }
 
+// --- Copilot V2 API Client Functions ---
 
+export async function investigateCopilotV2(
+  query: string,
+  context?: { current_page?: string; case_id?: string; customer_email?: string; payment_id?: string },
+  imageBase64?: string
+): Promise<import('./types').CopilotV2Investigation> {
+  const res = await fetch(`${API_BASE}/copilot/v2/investigate`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Operator-Role': 'support_agent',
+      'X-Operator-Id': 'copilot_agent',
+    },
+    body: JSON.stringify({
+      query,
+      context,
+      image_base64: imageBase64,
+    }),
+  });
+  if (!res.ok) await handleResponseError(res, 'Investigation failed');
+  return res.json();
+}
 
+export async function fetchCopilotV2Context(
+  context: { current_page?: string; case_id?: string; customer_email?: string; payment_id?: string }
+): Promise<{ suggestions: string[]; context_summary: any }> {
+  const res = await fetch(`${API_BASE}/copilot/v2/context`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(context),
+  });
+  if (!res.ok) await handleResponseError(res, 'Failed to fetch Copilot context');
+  return res.json();
+}
 
+export async function generateCopilotPaymentLink(payload: {
+  amount: number;
+  customer_name: string;
+  customer_email: string;
+  customer_phone?: string;
+  description?: string;
+  reference_id?: string;
+  issue_id?: string;
+  expires_in_hours?: number;
+}): Promise<any> {
+  const res = await fetch(`${API_BASE}/copilot/v2/payment-link`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Operator-Role': 'support_agent',
+      'X-Operator-Id': 'copilot_agent',
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) await handleResponseError(res, 'Failed to generate payment link');
+  return res.json();
+}
+
+export async function createEmailDraft(payload: {
+  template_id: string;
+  recipient_email: string;
+  recipient_name?: string;
+  variables?: Record<string, any>;
+  issue_id?: string;
+  case_id?: string;
+}): Promise<import('./types').EmailDraft> {
+  const res = await fetch(`${API_BASE}/copilot/v2/email/draft`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Operator-Role': 'support_agent',
+      'X-Operator-Id': 'copilot_agent',
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) await handleResponseError(res, 'Failed to create email draft');
+  return res.json();
+}
+
+export async function fetchEmailDraft(draftId: string): Promise<import('./types').EmailDraft> {
+  const res = await fetch(`${API_BASE}/copilot/v2/email/draft/${draftId}`);
+  if (!res.ok) await handleResponseError(res, 'Failed to fetch email draft');
+  return res.json();
+}
+
+export async function sendEmailDraft(draftId: string): Promise<any> {
+  const res = await fetch(`${API_BASE}/copilot/v2/email/send/${draftId}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Operator-Role': 'support_agent',
+      'X-Operator-Id': 'copilot_agent',
+    },
+  });
+  if (!res.ok) await handleResponseError(res, 'Failed to send email');
+  return res.json();
+}
+
+export async function investigateRefund(params: { case_id?: string; payment_id?: string }): Promise<any> {
+  const q = new URLSearchParams();
+  if (params.case_id) q.append('case_id', params.case_id);
+  if (params.payment_id) q.append('payment_id', params.payment_id);
+
+  const res = await fetch(`${API_BASE}/copilot/v2/refund/investigate?${q.toString()}`);
+  if (!res.ok) await handleResponseError(res, 'Failed to investigate refund');
+  return res.json();
+}
+
+export async function prepareRefund(payload: {
+  case_id: string;
+  amount?: number;
+  reason?: string;
+  issue_id?: string;
+}): Promise<any> {
+  const res = await fetch(`${API_BASE}/copilot/v2/refund/prepare`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Operator-Role': 'support_agent',
+      'X-Operator-Id': 'copilot_agent',
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) await handleResponseError(res, 'Failed to prepare refund');
+  return res.json();
+}
+
+export async function fetchCustomerIssues(filters?: {
+  status?: string;
+  category?: string;
+  severity?: string;
+  customer_email?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<import('./types').CustomerIssue[]> {
+  const q = new URLSearchParams();
+  if (filters?.status) q.append('status', filters.status);
+  if (filters?.category) q.append('category', filters.category);
+  if (filters?.severity) q.append('severity', filters.severity);
+  if (filters?.customer_email) q.append('customer_email', filters.customer_email);
+  if (filters?.limit) q.append('limit', filters.limit.toString());
+  if (filters?.offset) q.append('offset', filters.offset.toString());
+
+  const res = await fetch(`${API_BASE}/copilot/v2/issues?${q.toString()}`);
+  if (!res.ok) await handleResponseError(res, 'Failed to fetch customer issues');
+  const data = await res.json();
+  return Array.isArray(data) ? data : (data.issues || []);
+}
+
+export async function fetchCustomerIssue(issueId: string): Promise<import('./types').CustomerIssue> {
+  const res = await fetch(`${API_BASE}/copilot/v2/issues/${issueId}`);
+  if (!res.ok) await handleResponseError(res, 'Failed to fetch issue details');
+  return res.json();
+}
+
+export async function updateCustomerIssue(
+  issueId: string,
+  updates: {
+    status?: string;
+    severity?: string;
+    owner?: string;
+    next_action?: string;
+    resolution_summary?: string;
+    resolution_verified?: boolean;
+    resolution_evidence?: string;
+  }
+): Promise<import('./types').CustomerIssue> {
+  const res = await fetch(`${API_BASE}/copilot/v2/issues/${issueId}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Operator-Role': 'support_agent',
+      'X-Operator-Id': 'copilot_agent',
+    },
+    body: JSON.stringify(updates),
+  });
+  if (!res.ok) await handleResponseError(res, 'Failed to update issue');
+  return res.json();
+}
+
+export async function createCustomerIssue(payload: {
+  title: string;
+  category: string;
+  severity?: string;
+  customer_name?: string;
+  customer_email?: string;
+  payment_id?: string;
+  order_id?: string;
+  reported_symptoms?: string;
+}): Promise<import('./types').CustomerIssue> {
+  const res = await fetch(`${API_BASE}/copilot/v2/issues`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Operator-Role': 'support_agent',
+      'X-Operator-Id': 'copilot_agent',
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) await handleResponseError(res, 'Failed to create customer issue');
+  return res.json();
+}
+
+export async function fetchAutomationStatus(): Promise<any> {
+  const res = await fetch(`${API_BASE}/copilot/v2/automation/status`);
+  if (!res.ok) await handleResponseError(res, 'Failed to fetch automation status');
+  return res.json();
+}
+
+export async function runAutomationCheck(checkId: string): Promise<any> {
+  const res = await fetch(`${API_BASE}/copilot/v2/automation/check/${checkId}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Operator-Role': 'admin',
+      'X-Operator-Id': 'ops_admin',
+    },
+  });
+  if (!res.ok) await handleResponseError(res, `Failed to run automation check: ${checkId}`);
+  return res.json();
+}
+
+export async function fetchAdminStatus(): Promise<{
+  kill_switch_active: boolean;
+  execution_mode: string;
+  allow_production_mode: boolean;
+  confirm_live_financial_transactions: boolean;
+}> {
+  const res = await fetch(`${API_BASE}/admin/status`);
+  if (!res.ok) throw new Error('Failed to fetch admin status');
+  return res.json();
+}

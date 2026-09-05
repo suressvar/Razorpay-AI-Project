@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
   Card,
   Input,
@@ -14,6 +15,8 @@ import {
   Spin,
   Badge,
   Divider,
+  Space,
+  Steps,
 } from 'antd';
 import {
   RobotFilled,
@@ -31,12 +34,16 @@ import {
   ThunderboltFilled,
   FileImageOutlined,
   SafetyCertificateOutlined,
+  MailOutlined,
+  AuditOutlined,
+  DollarCircleOutlined,
 } from '@ant-design/icons';
-import { sendCopilotMessage, createCopilotPaymentLink } from '../api';
+import { sendCopilotMessage, createCopilotPaymentLink, investigateCopilotV2, investigateRefund } from '../api';
 import {
   CopilotDiagnosis,
   FollowUpSuggestion,
   CreatePaymentLinkResponse,
+  CopilotV2Investigation,
 } from '../types';
 
 const { TextArea } = Input;
@@ -49,6 +56,7 @@ interface MessageItem {
   imagePreview?: string;
   imageName?: string;
   diagnosis?: CopilotDiagnosis;
+  investigation?: CopilotV2Investigation;
   fallbackMessage?: string;
   createdPaymentLink?: CreatePaymentLinkResponse;
   suggestions?: FollowUpSuggestion[];
@@ -63,16 +71,24 @@ const CATEGORY_CHIPS = [
 ];
 
 export default function Copilot() {
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+
   const [messages, setMessages] = useState<MessageItem[]>([]);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
   const [selectedImage, setSelectedImage] = useState<{ base64: string; name: string } | null>(null);
-  
+
   // Create Payment Link Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeDiagnosis, setActiveDiagnosis] = useState<CopilotDiagnosis | null>(null);
   const [submittingLink, setSubmittingLink] = useState(false);
   const [form] = Form.useForm();
+
+  // Refund Modal state
+  const [refundModalData, setRefundModalData] = useState<any>(null);
+  const [refundModalOpen, setRefundModalOpen] = useState(false);
+  const [checkingRefund, setCheckingRefund] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const chatBottomRef = useRef<HTMLDivElement | null>(null);
@@ -84,6 +100,14 @@ export default function Copilot() {
   useEffect(() => {
     scrollToBottom();
   }, [messages, loading]);
+
+  // Read URL params and auto-trigger investigation if provided
+  useEffect(() => {
+    const q = searchParams.get('query');
+    if (q) {
+      handleSendMessage(q);
+    }
+  }, []);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -133,6 +157,45 @@ export default function Copilot() {
     setInputText('');
     setSelectedImage(null);
     setLoading(true);
+
+    // Try V2 Copilot structured investigation first
+    try {
+      const context = {
+        current_page: window.location.pathname,
+        case_id: searchParams.get('case_id') || undefined,
+        customer_email: searchParams.get('customer_email') || undefined,
+        payment_id: searchParams.get('payment_id') || undefined,
+      };
+
+      const invRes = await investigateCopilotV2(
+        queryToSend || 'Customer support investigation request',
+        context,
+        currentImage?.base64
+      );
+
+      const assistantMsgId = `asst_${Date.now()}`;
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: assistantMsgId,
+          sender: 'assistant',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          investigation: invRes,
+          diagnosis: invRes.diagnosis,
+          suggestions: [
+            { id: 's_draft', text: 'Draft customer email with solution', action: 'DRAFT_EMAIL' },
+            { id: 's_link', text: 'Generate retry payment link', action: 'CREATE_PAYMENT_LINK' },
+            { id: 's_issue', text: `View tracked issue (${invRes.issue_id})`, action: 'VIEW_ISSUE' },
+          ],
+          userFeedback: null,
+        },
+      ]);
+      setLoading(false);
+      return;
+    } catch (v2Err) {
+      // Graceful fallback to v1 template matching
+      console.warn('V2 investigation engine fallback:', v2Err);
+    }
 
     try {
       const res = await sendCopilotMessage(
@@ -189,13 +252,26 @@ export default function Copilot() {
     }
   };
 
-  const handleSuggestionClick = (suggestion: FollowUpSuggestion, diagnosisContext?: CopilotDiagnosis) => {
+  const handleSuggestionClick = (suggestion: FollowUpSuggestion, diagnosisContext?: CopilotDiagnosis, investigationContext?: CopilotV2Investigation) => {
     if (suggestion.action === 'CREATE_PAYMENT_LINK') {
       const diag = diagnosisContext || activeDiagnosis;
       if (diag) {
         openPaymentLinkModal(diag);
       } else {
         handleSendMessage(suggestion.text);
+      }
+    } else if (suggestion.action === 'DRAFT_EMAIL') {
+      const diag = diagnosisContext || activeDiagnosis;
+      const issueId = investigationContext?.issue_id || '';
+      navigate(
+        `/email/compose?issue_id=${issueId}&email=${encodeURIComponent(diag?.customer_email || '')}&name=${encodeURIComponent(diag?.customer_name || '')}&amount=${encodeURIComponent(diag?.amount_inr || '')}&case_id=${diag?.case_id || ''}`
+      );
+    } else if (suggestion.action === 'VIEW_ISSUE') {
+      const issueId = investigationContext?.issue_id;
+      if (issueId) {
+        navigate(`/issues/${issueId}`);
+      } else {
+        navigate('/issues');
       }
     } else {
       handleSendMessage(suggestion.text);
@@ -288,7 +364,6 @@ export default function Copilot() {
     <div className="max-w-5xl mx-auto flex flex-col h-[calc(100vh-108px)]">
       {/* Top Header Bar */}
       <div className="mb-4 bg-white px-6 py-3.5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-full bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-600 text-base">
             <RobotFilled />
@@ -377,27 +452,97 @@ export default function Copilot() {
                   <Avatar size={34} icon={<RobotFilled />} className="bg-blue-600 text-white mt-1 shadow-sm" />
 
                   <div className="max-w-2xl bg-white border border-slate-200 rounded-2xl rounded-tl-sm p-4 shadow-sm">
-                    {/* Rich Diagnosis View */}
-                    {msg.diagnosis && (
+                    {/* Rich Diagnosis & Investigation View */}
+                    {(msg.investigation || msg.diagnosis) && (
                       <div>
+                        {/* Investigation Reasoning Trace Chips */}
+                        {msg.investigation?.steps && msg.investigation.steps.length > 0 && (
+                          <div className="mb-3 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                              <span className="flex items-center gap-1">
+                                <SafetyCertificateOutlined className="text-blue-600" /> Multi-Step Investigation Trace
+                              </span>
+                              <span className="text-emerald-600 font-medium font-mono text-[10px]">VERIFIED</span>
+                            </div>
+                            <div className="flex flex-wrap gap-1">
+                              {msg.investigation.steps.map((st, i) => (
+                                <Tag key={i} color="success" icon={<CheckCircleFilled className="text-[10px]" />} style={{ fontSize: 11, padding: '1px 6px' }}>
+                                  {((st.step || st.step_type || st.title || 'Step') as string).replace(/_/g, ' ')} {st.duration_ms ? `(${st.duration_ms}ms)` : ''}
+                                </Tag>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
                         {/* Bold Diagnosis Headline */}
                         <div className="text-sm font-bold text-slate-900 leading-snug mb-2 flex items-start gap-1.5">
                           <span className="text-blue-600 font-extrabold text-base leading-none">•</span>
-                          <span>{msg.diagnosis.headline}</span>
+                          <span>{msg.investigation?.what_happened?.headline || msg.diagnosis?.headline}</span>
                         </div>
 
                         {/* Plain Language Explanation */}
                         <p className="text-xs text-slate-600 leading-relaxed mb-3">
-                          {msg.diagnosis.explanation}
+                          {msg.investigation?.what_happened?.explanation || msg.diagnosis?.explanation}
                         </p>
 
                         {/* Auto-reversal Timeline (if relevant) */}
-                        {msg.diagnosis.auto_reversal_timeline && (
+                        {(msg.investigation?.what_happened?.auto_reversal_timeline || msg.diagnosis?.auto_reversal_timeline) && (
                           <div className="mb-3.5 px-3 py-2 bg-sky-50 border border-sky-200 rounded-lg flex items-start gap-2 text-xs text-sky-800">
                             <InfoCircleOutlined className="text-sky-600 mt-0.5" />
                             <div>
                               <span className="font-semibold">Auto-Reversal: </span>
-                              {msg.diagnosis.auto_reversal_timeline}
+                              {msg.investigation?.what_happened?.auto_reversal_timeline || msg.diagnosis?.auto_reversal_timeline}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Verified Evidence Section */}
+                        {msg.investigation?.verified_evidence && msg.investigation.verified_evidence.length > 0 && (
+                          <div className="mb-3.5 bg-slate-50/70 p-2.5 rounded-lg border border-slate-200">
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2 flex items-center justify-between">
+                              <span>Verified Evidence Facts</span>
+                              <span className="text-[10px] text-slate-400 font-normal">
+                                {msg.investigation.verified_evidence.length} facts collected
+                              </span>
+                            </div>
+                            <div className="space-y-1.5">
+                              {msg.investigation.verified_evidence.map((ev, i) => (
+                                <div key={i} className="p-2 bg-white border border-slate-200 rounded text-xs flex items-start justify-between">
+                                  <div>
+                                    <Tag color="geekblue" className="text-[10px] font-mono mr-1.5">{ev.source}</Tag>
+                                    <span className="text-slate-700">{ev.description}</span>
+                                  </div>
+                                  <Tag color={ev.confidence === 'HIGH' ? 'green' : 'gold'} className="text-[10px]">
+                                    {ev.confidence}
+                                  </Tag>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Ranked Potential Root Causes */}
+                        {msg.investigation?.possible_causes && msg.investigation.possible_causes.length > 0 && (
+                          <div className="mb-3.5">
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                              Identified Root Causes (Ranked by Confidence)
+                            </div>
+                            <div className="space-y-1.5">
+                              {msg.investigation.possible_causes.map((cause, i) => (
+                                <div key={i} className="p-2.5 bg-blue-50/50 border border-blue-100 rounded text-xs">
+                                  <div className="flex items-center justify-between mb-1">
+                                    <span className="font-semibold text-slate-900">{cause.description}</span>
+                                    <Tag color={cause.confidence === 'HIGH' ? 'green' : cause.confidence === 'MEDIUM' ? 'gold' : 'blue'} className="text-[10px]">
+                                      {cause.confidence} CONFIDENCE
+                                    </Tag>
+                                  </div>
+                                  {cause.recommended_action && (
+                                    <div className="text-[11px] text-slate-600 mt-1">
+                                      <span className="font-medium text-slate-700">Action:</span> {cause.recommended_action}
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
                             </div>
                           </div>
                         )}
@@ -405,16 +550,77 @@ export default function Copilot() {
                         {/* How to Resolve This Section */}
                         <div className="mt-3 pt-3 border-t border-slate-100 bg-slate-50/70 -mx-4 px-4 py-3">
                           <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
-                            How to resolve this
+                            Recommended Resolution Plan
                           </div>
                           <div className="text-xs text-slate-700 mb-2">
-                            <span className="font-semibold text-slate-900">{msg.diagnosis.resolution_name}</span> —{' '}
-                            {msg.diagnosis.resolution_instruction}
+                            <span className="font-semibold text-slate-900">
+                              {msg.investigation?.recommended_solution?.resolution_name || msg.diagnosis?.resolution_name}
+                            </span> —{' '}
+                            {msg.investigation?.recommended_solution?.resolution_instruction || msg.diagnosis?.resolution_instruction}
                           </div>
 
                           <div className="px-3 py-2 bg-white rounded-lg border border-blue-200 text-xs text-slate-800 flex items-start gap-2 shadow-xs">
-                            <span className="font-bold text-blue-600">My recommendation:</span>
-                            <span className="text-slate-700">{msg.diagnosis.recommendation}</span>
+                            <span className="font-bold text-blue-600">Copilot Advice:</span>
+                            <span className="text-slate-700">
+                              {msg.investigation?.recommended_solution?.recommendation || msg.diagnosis?.recommendation}
+                            </span>
+                          </div>
+
+                          {/* Authorized Operations Bar */}
+                          <div className="mt-3 pt-2.5 border-t border-slate-200 flex flex-wrap gap-2">
+                            <Button
+                              size="small"
+                              type="primary"
+                              icon={<MailOutlined />}
+                              onClick={() => {
+                                const diag = msg.investigation?.diagnosis || msg.diagnosis;
+                                navigate(
+                                  `/email/compose?issue_id=${msg.investigation?.issue_id || ''}&email=${encodeURIComponent(diag?.customer_email || '')}&name=${encodeURIComponent(diag?.customer_name || '')}&amount=${encodeURIComponent(diag?.amount_inr || '')}&case_id=${msg.investigation?.case_id || diag?.case_id || ''}`
+                                );
+                              }}
+                              style={{ background: '#0052cc' }}
+                            >
+                              Draft Customer Email
+                            </Button>
+
+                            {msg.investigation?.issue_id && (
+                              <Button
+                                size="small"
+                                icon={<AuditOutlined />}
+                                onClick={() => navigate(`/issues/${msg.investigation!.issue_id}`)}
+                              >
+                                Track Issue ({msg.investigation.issue_id})
+                              </Button>
+                            )}
+
+                            <Button
+                              size="small"
+                              icon={<LinkOutlined />}
+                              onClick={() => openPaymentLinkModal(msg.investigation?.diagnosis || msg.diagnosis)}
+                            >
+                              Generate Link
+                            </Button>
+
+                            <Button
+                              size="small"
+                              icon={<DollarCircleOutlined />}
+                              onClick={async () => {
+                                const diag = msg.investigation?.diagnosis || msg.diagnosis;
+                                setCheckingRefund(true);
+                                try {
+                                  const refRes = await investigateRefund({ payment_id: diag?.payment_id, case_id: diag?.case_id });
+                                  setRefundModalData(refRes);
+                                  setRefundModalOpen(true);
+                                } catch (err: any) {
+                                  message.error(err.message || 'Failed to check refund');
+                                } finally {
+                                  setCheckingRefund(false);
+                                }
+                              }}
+                              loading={checkingRefund}
+                            >
+                              Check Refund
+                            </Button>
                           </div>
                         </div>
 
@@ -424,9 +630,8 @@ export default function Copilot() {
                             <Tooltip title="Helpful diagnosis">
                               <button
                                 onClick={() => handleFeedback(msg.id, 'like')}
-                                className={`p-1 rounded hover:text-blue-600 hover:bg-slate-100 transition-colors ${
-                                  msg.userFeedback === 'like' ? 'text-blue-600 font-bold' : ''
-                                }`}
+                                className={`p-1 rounded hover:text-blue-600 hover:bg-slate-100 transition-colors ${msg.userFeedback === 'like' ? 'text-blue-600 font-bold' : ''
+                                  }`}
                               >
                                 <LikeOutlined />
                               </button>
@@ -434,9 +639,8 @@ export default function Copilot() {
                             <Tooltip title="Not helpful">
                               <button
                                 onClick={() => handleFeedback(msg.id, 'dislike')}
-                                className={`p-1 rounded hover:text-rose-600 hover:bg-slate-100 transition-colors ${
-                                  msg.userFeedback === 'dislike' ? 'text-rose-600 font-bold' : ''
-                                }`}
+                                className={`p-1 rounded hover:text-rose-600 hover:bg-slate-100 transition-colors ${msg.userFeedback === 'dislike' ? 'text-rose-600 font-bold' : ''
+                                  }`}
                               >
                                 <DislikeOutlined />
                               </button>
@@ -553,7 +757,7 @@ export default function Copilot() {
                           {msg.suggestions.map((sug, idx) => (
                             <button
                               key={sug.id || idx}
-                              onClick={() => handleSuggestionClick(sug, msg.diagnosis || undefined)}
+                              onClick={() => handleSuggestionClick(sug, msg.diagnosis || undefined, msg.investigation || undefined)}
                               className="text-left px-3 py-2 rounded-lg bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 text-xs text-slate-700 hover:text-blue-700 font-medium transition-colors flex items-center justify-between group"
                             >
                               <span className="flex items-center gap-2">
@@ -617,9 +821,8 @@ export default function Copilot() {
               <Button
                 icon={<PaperClipOutlined />}
                 onClick={() => fileInputRef.current?.click()}
-                className={`flex items-center justify-center ${
-                  selectedImage ? 'text-blue-600 border-blue-400 bg-blue-50' : 'text-slate-600'
-                }`}
+                className={`flex items-center justify-center ${selectedImage ? 'text-blue-600 border-blue-400 bg-blue-50' : 'text-slate-600'
+                  }`}
               />
             </Tooltip>
 
@@ -732,6 +935,67 @@ export default function Copilot() {
             </Button>
           </div>
         </Form>
+      </Modal>
+
+      {/* Refund Investigation Modal */}
+      <Modal
+        title={
+          <div className="flex items-center gap-2 text-slate-900 font-bold">
+            <DollarCircleOutlined className="text-blue-600" />
+            <span>Refund Status & Eligibility</span>
+          </div>
+        }
+        open={refundModalOpen}
+        onCancel={() => setRefundModalOpen(false)}
+        footer={null}
+        width={540}
+        destroyOnClose
+      >
+        {refundModalData && (
+          <div className="space-y-3">
+            <div className="bg-slate-50 p-3 rounded border border-slate-200 text-xs space-y-2">
+              <div className="flex justify-between">
+                <span className="text-slate-500">Payment ID:</span>
+                <span className="font-mono font-semibold text-slate-800">{refundModalData.payment_id || '—'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Customer:</span>
+                <span className="font-semibold text-slate-800">{refundModalData.customer_name || '—'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Original Amount:</span>
+                <span className="font-semibold text-slate-800">
+                  ₹{refundModalData.original_amount_inr ? refundModalData.original_amount_inr.toLocaleString() : '0.00'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Remaining Refundable:</span>
+                <span className="font-semibold text-emerald-700">
+                  ₹{refundModalData.remaining_refundable_inr ? refundModalData.remaining_refundable_inr.toLocaleString() : '0.00'}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500">Refund Status:</span>
+                <Tag color={refundModalData.refund_eligible ? 'green' : 'orange'}>
+                  {refundModalData.refund_status || (refundModalData.refund_eligible ? 'Eligible' : 'Not Eligible')}
+                </Tag>
+              </div>
+            </div>
+
+            {refundModalData.note && (
+              <div className="p-2.5 bg-amber-50 border border-amber-200 rounded text-xs text-amber-900">
+                <InfoCircleOutlined className="mr-1" />
+                {refundModalData.note}
+              </div>
+            )}
+
+            <div className="flex justify-end pt-2">
+              <Button type="primary" onClick={() => setRefundModalOpen(false)} style={{ background: '#0052cc' }}>
+                Close
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );
