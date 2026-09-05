@@ -1,171 +1,187 @@
-#  Recovery Autopilot — Razorpay Buildathon (Track 03: AI Revenue Recovery)
+# Razorpay Recovery Autopilot
 
-> **Autonomous, safety-bounded subscription payment recovery agent built on Razorpay.**
+Recovery Autopilot is an automated payment recovery engine built for subscription merchants using Razorpay. It detects recurring payment failures, diagnoses root causes, proposes policy-bounded recovery actions, and reconciles subsequent payments into an immutable recovery ledger.
 
-Recovery Autopilot detects failed subscription payments, accurately diagnoses root causes using Gemini AI, proposes bounded recovery interventions, executes approved actions with exact financial correlation, and proves measurable incremental revenue recovery with zero policy violations.
-
----
-
-##  Key Capabilities & Highlights
-
-1. **AI Copilot (`/copilot`)**: Support agent copilot with multimodal screenshot diagnostics, payment record cross-referencing, and one-click payment link generation.
-2. **Exact Payment Correlation & Financial Correctness**: 5-way exact identifier matching (`payment_id`, `payment_link_id`, `invoice_id`, `order_id`, `subscription_id`), 5-paise amount tolerance validation, and unmatched webhook quarantine table (`/unmatched`).
-3. **Strict 3-Mode Architecture**: Explicit separation between `synthetic` (zero-network local simulation), `razorpay_test` (authentic `rzp_test_` API calls), and `production` (locked behind dual explicit safety flags).
-4. **Fast Async Webhook Ingestion & Durable Queue**: `<50ms` webhook ACK with database-backed durable queue, row leasing, bounded retries with exponential backoff, and dead-letter queueing.
-5. **Rigorous Benchmark Evidence**: 95% bootstrap confidence intervals, multi-seed paired comparisons, train/held-out test split, zero ground-truth label leakage, and automated markdown reports.
-6. **Enterprise Security & Human-in-the-Loop**: Role-Based Access Control (RBAC: `viewer`, `reviewer`, `admin`), PII redaction (`+919****210`, `sid***@example.com`), emergency kill-switch (`POST /admin/kill-switch`), and comprehensive threat model.
+This project addresses revenue loss caused by failed recurring transactions, such as bank timeouts, card expirations, and mandate revocations. It aligns with the objectives of Track 03 (AI Revenue Recovery) by replacing indiscriminate retries and generic email blasts with adaptive, guardrailed workflows. This repository is an independent Buildathon entry and is not officially affiliated with or endorsed by Razorpay.
 
 ---
 
-## 🏛️ Architecture & Decision Flow
+## The Problem
 
-```mermaid
-flowchart TD
-    WH["Razorpay Webhooks / Simulation Engine"] --> FastIngest["Fast-Path Ingestion & HMAC Verification (<50ms)"]
-    FastIngest --> Queue[("Durable Webhook Queue (SQLite/PostgreSQL)")]
-    Queue --> Worker["Background Queue Worker (Row Leasing & Retries)"]
-    Worker --> Corr{"Exact Identifier & Amount Match?"}
-    
-    Corr -- "No Match / Amount Mismatch" --> Unmatched["Unmatched Webhooks Quarantine (/unmatched)"]
-    Corr -- "Exact Match" --> StateCheck{"Terminal State Check"}
-    StateCheck -- "Already Recovered / Opted Out" --> Stop["STOP (Idempotent No-Op)"]
-    StateCheck -- "Active Failure" --> AI["Gemini AI Diagnosis & Proposal"]
-    
-    AI --> Policy["Deterministic Safety Policy Engine"]
-    Policy --> Gate{"Requires Human Review?"}
-    
-    Gate -- "High Value / Low Confidence / Kill Switch" --> Human["Human Review Queue (/review)"]
-    Human -- "Operator Approved" --> Executor["Razorpay Gateway Adapter"]
-    Gate -- "Approved" --> Executor
-    
-    Executor --> ModeCheck{"Execution Mode"}
-    ModeCheck -- "synthetic" --> MockExec["Local Simulation (plink_syn_...)"]
-    ModeCheck -- "razorpay_test" --> LiveTest["Genuine Razorpay Test API (rzp_test_...)"]
-    
-    MockExec --> Audit[("Immutable Audit Trail & Metrics")]
-    LiveTest --> Audit
-    Human -- "Operator Rejected" --> Stop
-```
+Recurring billing failures in India represent a major operational friction. Subscription renewals frequently fail due to banking gateway timeouts, insufficient balances around billing dates, expired cards, or mandate cancellations under Reserve Bank of India e-mandate regulations.
+
+Standard merchant systems either retry cards repeatedly at fixed intervals or broadcast generic reminder emails. Blind retries often fail when a card is expired or funds are absent, incurring gateway fees and triggering fraud rate limits. Generic emails suffer from low open rates and lack contextual explanations.
+
+For an illustrative example: an annual subscription payment of 4,999 INR that fails at 03:00 due to a scheduled bank downtime should not be retried five times until the subscription halts. A more effective approach pauses retries during the downtime, re-attempts the charge when the bank recovers, or offers an instant Unified Payments Interface (UPI) payment link during business hours.
 
 ---
 
-##  Quick Start (2 Minutes — Zero Dependencies)
+## How the Application Works
 
-Runs instantly on any machine with **Python 3.11+** and **Node.js 18+** using local SQLite and deterministic offline simulation.
+The recovery workflow follows seven structured steps:
 
-### 1. Backend
+1. **Ingest Failure Event**: The system receives a `payment.failed` webhook. Raw body signature is verified using HMAC-SHA256, and the event is written to a durable database queue within 50 milliseconds.
+2. **Correlate Payment Context**: A background worker leases the job and matches the case using exact identifiers across payment ID, subscription ID, order ID, or customer ID.
+3. **Diagnose Root Cause**: The system classifies the failure into established categories, including bank timeout, insufficient funds, expired card, or customer action required.
+4. **Propose Recovery Action**: An action plan is generated, such as smart retrying, sending a localized payment link, or initiating a voice follow-up.
+5. **Enforce Safety Guardrails**: The proposed intervention passes through a deterministic policy engine that checks Do Not Disturb (DND) status, enforces minimum cooling-off intervals, and caps contact attempts at three. High-value cases (15,000 INR and above) are routed to a human review queue.
+6. **Execute Intervention**: Once approved, the system generates an idempotent Razorpay test-mode payment link or dispatches a simulated notification.
+7. **Reconcile and Update Ledger**: When a `payment.captured` or `order.paid` webhook arrives, the system validates the amount and marks the case as recovered. Revenue is only credited to the ledger after explicit gateway capture confirmation; generated payment links are never counted as recovered revenue.
+
+---
+
+## What AI Does and What Code Controls
+
+Language models and deterministic code handle strictly separated responsibilities:
+
+- **Language Model Tasks**: A configured language model (OpenAI, Gemini, or Ollama) analyzes failure codes and interaction history to summarize diagnostic evidence and draft customer explanations.
+- **Deterministic Code Tasks**: The `SafetyPolicyEngine` controls financial rules, retry cooldowns, contact frequency limits, amount tolerances, and execution permissions. The model has no write access to the database and cannot directly call payment gateway APIs.
+- **Human Approval Requirements**: Cases involving financial discrepancies, amounts exceeding 15,000 INR, or unknown failure codes require explicit human operator approval through the review dashboard.
+- **Handling Model Uncertainty**: If an external model call fails, times out, or returns an unparseable response, the system automatically falls back to a deterministic, rule-based decision tree.
+
+---
+
+## Implemented Features
+
+| Feature | Purpose | Current Implementation Status |
+| :--- | :--- | :--- |
+| Exact Payment Correlation | Matches webhooks across multiple identifiers with zero guessing | Working (Verified by integration tests) |
+| Durable Webhook Queue | Database-backed queue with row leasing, bounded retries, and dead-letter storage | Working (Fast-path ACK under 50ms) |
+| Deterministic Safety Engine | Enforces DND lists, cooling-off windows, and attempt limits | Working (Zero policy violations across test runs) |
+| Operator Review Queue | Four-eyes approval interface for high-value and flagged transactions | Working (Rejects version-mismatched approvals) |
+| Support Diagnostic Copilot | Assistant that cross-references payment records and generates links | Working (Interactive in dashboard) |
+| Multilingual Speech Engine | Vernacular normalization and voice dialogue state machine | Working (Configured with local fallback) |
+| Financial Recovery Ledger | Immutable record of captured funds with unique transaction constraints | Working (Authorizations excluded from captured revenue) |
+| Unmatched Webhook Isolation | Quarantines uncorrelatable events to prevent case corruption | Working (Inspectable via dedicated dashboard view) |
+| Razorpay Test Mode Client | Integration with Razorpay test APIs using test credentials | Working (Rejects live keys; mock client fallback) |
+
+---
+
+## Voice Recovery
+
+Voice communication can recover subscription failures where digital notifications are overlooked. The voice module implements structured phone conversations for payment confirmation, payment link dispatch, and dispute escalation.
+
+- **Speech Providers**: Speech recognition is supported via Faster-Whisper, and speech synthesis uses Microsoft Edge Neural TTS (`edge-tts`). For environments without external dependencies or network access, the system includes a local mathematical tone generator and browser-based speech synthesis as fallbacks.
+- **Supported Languages**: Text normalization, currency phrasing, date vocalization, and banking terminology are configured for English, Hindi, Kannada, Tamil, Telugu, Marathi, and Bengali.
+- **Barge-In and Interruptions**: A server-side state machine detects user speech and immediately stops agent audio playback to prevent overlapping dialogue.
+- **Limitations**: Native-speaker pronunciation has been validated primarily for Hindi and English. Other regional languages rely on standard acoustic models and dictionary transliterations and have not undergone comprehensive native-speaker quality audits.
+
+---
+
+## Architecture and Technology
+
+| Layer | Technologies Used | Role |
+| :--- | :--- | :--- |
+| Frontend | React 18, Vite, TypeScript, Ant Design, Tailwind CSS | Operator dashboard, Copilot workbench, and review UI |
+| Backend API | Python 3.11+, FastAPI, Uvicorn, Pydantic v2 | REST API endpoints, webhook ingress, and authentication |
+| Persistence | SQLite (default), PostgreSQL-ready, SQLAlchemy 2.0 async | Relational storage for cases, queues, audits, and ledgers |
+| Workers | In-process asynchronous worker pool | Durable queue polling, job leasing, and retry dispatch |
+| AI Integration | Unified adapter (OpenAI, Gemini, Ollama, Heuristic Mock) | Diagnostic reasoning and customer dialogue generation |
+| Gateway SDK | Official Razorpay Python SDK | Test-mode link creation and HMAC signature verification |
+
+Incoming webhooks are verified and enqueued in a single database transaction. The background worker leases queue items, correlates them with existing records, evaluates policy guardrails, and dispatches approved actions before updating the ledger.
+
+---
+
+## Running the Project
+
+### Prerequisites
+- Python 3.11 or newer
+- Node.js 18 or newer
+
+### 1. Backend Setup
 
 ```bash
-# Navigate to backend directory
 cd backend
+pip install -r requirements.txt
 
-# Install dependencies (or use pip install -r pyproject.toml)
-python -m pip install uv
-python -m uv pip install --system -r pyproject.toml
+# Run automated test suite (136 unit and integration tests)
+python -m pytest tests/unit tests/integration
 
-# Start the API server with in-process queue worker
+# Start the API server
 python -m uvicorn recovery_autopilot.main:app --host 127.0.0.1 --port 8000 --app-dir src
 ```
-API Documentation available at: **http://127.0.0.1:8000/docs**
 
-### 2. Frontend
+The backend starts at `http://127.0.0.1:8000`. Interactive OpenAPI documentation is available at `http://127.0.0.1:8000/docs`.
+
+### 2. Frontend Setup
 
 ```bash
-# In a new terminal window:
 cd frontend
 npm install
 npm run dev
 ```
-Open Dashboard at: **http://localhost:5173**
 
----
+The dashboard opens at `http://localhost:5173`.
 
-## 💳 Running with Genuine Razorpay Test Mode (5 Minutes)
+### 3. Execution Modes
+- **Synthetic Mode (Default)**: Runs locally with zero external network dependencies. Payment links and webhook events use deterministic local generators.
+- **Genuine Razorpay Test Mode**: Set `PAYMENT_EXECUTION_MODE=razorpay_test` in `.env` along with your `RAZORPAY_KEY_ID` (must begin with `rzp_test_`), `RAZORPAY_KEY_SECRET`, and `RAZORPAY_WEBHOOK_SECRET`. Live merchant keys (`rzp_live_`) are blocked by code validation.
 
-To connect Recovery Autopilot to your real Razorpay Test Account:
+### 4. Optional Docker Compose Setup
 
-1. Copy `.env.example` to `.env`:
-   ```bash
-   cp .env.example .env
-   ```
-2. Set your test mode API keys in `.env`:
-   ```env
-   PAYMENT_EXECUTION_MODE=razorpay_test
-   RAZORPAY_KEY_ID=rzp_test_YOUR_KEY_ID
-   RAZORPAY_KEY_SECRET=YOUR_KEY_SECRET
-   RAZORPAY_WEBHOOK_SECRET=YOUR_WEBHOOK_SECRET
-   ```
-3. Run the automated smoke test script to verify credentials:
-   ```bash
-   python scripts/smoke_test_razorpay.py
-   ```
-4. Read the detailed setup guide in [`docs/TEST_MODE_GUIDE.md`](docs/TEST_MODE_GUIDE.md).
-
----
-
-##  Benchmark & Evaluation Evidence
-
-Run the scientific benchmark evaluation comparing Recovery Autopilot against standard merchant baseline strategies:
+For evaluators preferring containerized execution:
 
 ```bash
-# Run full deterministic benchmark on 500 cases with seed 42
-python -m pytest backend/tests/integration/test_prompt9_evaluation_benchmark.py
-```
-
-### Benchmark Results Summary (500 cases, seed=42, 80/20 train/held-out split)
-
-| Strategy | Recovery Rate (95% CI) | Simulated Recovery (INR) | Median Hours | Safety Violations | Action Accuracy |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **Recovery Autopilot** | **69.4%** `[65.6%, 73.4%]` | **₹2,531,640** | **8.5 hrs** | **0 (Zero Violations)** | **98.4%** |
-| **Fixed Retry Baseline** | 17.2% `[13.8%, 20.6%]` | ₹406,111 | 22.0 hrs | 43 violations | — |
-| **Incremental Lift** | **+52.2 percentage points** | **+₹2,125,528** | **Faster cycle** | **Guaranteed Safe** | **100% Esc. Precision** |
-
-*Note: Financial metrics reflect simulated recovery on synthetic test scenarios under laboratory conditions; they do not represent real merchant revenue.*
-
-Detailed report and category breakdowns saved in [`docs/evaluation/ai_benchmark_report.md`](docs/evaluation/ai_benchmark_report.md) and [`data/scenarios/evaluation_results.json`](data/scenarios/evaluation_results.json).
-
----
-
-##  Demonstration & Pitch Script
-
-A complete 5-minute judge walkthrough script is available at [`docs/demo-script.md`](docs/demo-script.md).
-The comprehensive verification matrix is documented in [`docs/qa/final-readiness-report.md`](docs/qa/final-readiness-report.md).
-
----
-
-##  Security, Safety & RBAC
-
-- **Safety Policy Engine**: Deterministic guardrail rules prevent any unsafe or unauthorized LLM actions.
-- **Server-Side Authentication & RBAC**:
-  - `viewer`: Read-only access to dashboard and cases.
-  - `reviewer`: Allowed to approve/reject cases held in human review queue (bound to `action_version`).
-  - `admin`: Allowed to toggle emergency kill-switch and alter operational settings.
-- **Emergency Kill Switch**: `POST /admin/kill-switch` instantly halts all outbound recovery actions immediately before side effects.
-- **PII Redaction**: Customer emails (`sid***@example.com`) and phone numbers (`+91****210`) are automatically masked in audit logs.
-- **Credential Exposure Inventory**: Detailed in [`docs/security/credential-exposure-inventory.md`](docs/security/credential-exposure-inventory.md).
-
----
-
-##  Test Suite Execution
-
-Run the complete test suite across accounting, webhooks, settings, RBAC, speech recognition, speech synthesis, voice state machines, and evaluation:
-
-```bash
-# Backend pytest suite (134 unit & integration tests passing in ~30s)
-cd backend && python -m pytest tests/unit tests/integration
-
-# Frontend TypeScript check and production build
-cd frontend && npm run build
-```
-
----
-
-##  Docker Deployment (Full Stack)
-
-```bash
-# Build and run all services (Backend, Frontend, PostgreSQL, Redis)
+# Build and launch all services (Backend, Frontend, PostgreSQL, Redis)
 docker compose up --build -d
 ```
-Access endpoints:
-- Frontend UI: `http://localhost:5173`
-- Backend API: `http://localhost:8000/docs`
+
+Access endpoints at `http://localhost:5173` (Frontend UI) and `http://localhost:8000/docs` (Backend API).
+
+---
+
+## A Short Judge Walkthrough
+
+This five-minute sequence demonstrates the core workflow:
+
+1. **Overview Dashboard (`http://localhost:5173/`)**: View operational KPIs, the real-time recovery ledger, and the chronological audit feed.
+2. **Explore Cases (`http://localhost:5173/cases`)**: Filter cases by status or category. Select a case to inspect failure telemetry and historical attempts.
+3. **Inspect Case Detail (`http://localhost:5173/cases/:caseId`)**: Review the model diagnosis and the bounded intervention plan. Open the Voice Recovery panel to test interactive voice prompts in English or Hindi.
+4. **Verify Safety Policy Gate (`http://localhost:5173/review`)**: View high-value cases held for human approval. Observe that approvals require valid reviewer credentials and are tied to the active action version.
+5. **Inspect Unmatched Events (`http://localhost:5173/unmatched`)**: Review quarantined webhook events that failed correlation, ensuring non-matching payloads never corrupt existing recovery records.
+6. **Support Copilot (`http://localhost:5173/copilot`)**: Submit a support inquiry (e.g., "Customer reports double deduction on card") to observe multi-step diagnostic reasoning and payment link creation.
+
+---
+
+## Evaluation and Verification
+
+The evaluation pipeline benchmarks Recovery Autopilot against a standard fixed-retry baseline across a versioned 500-scenario dataset (`Dataset v2.1.0`, random seed 42).
+
+```bash
+cd backend
+python -m pytest tests/integration/test_prompt9_evaluation_benchmark.py
+```
+
+### Benchmark Summary (Synthetic Paired Simulation)
+
+| Metric | Recovery Autopilot | Fixed Retry Baseline | Delta | Notes |
+| :--- | :--- | :--- | :--- | :--- |
+| Overall Recovery Rate | 69.4% (95% CI: [65.6%, 73.4%]) | 17.2% (95% CI: [13.8%, 20.6%]) | +52.2% | Calculated via 1,000 bootstrap iterations |
+| Held-Out Test Split Recovery | 75.0% | 15.0% | +60.0% | Evaluated on disjoint 20% test slice (N=100) |
+| Action Decision Accuracy | 98.4% | N/A | High alignment | Ground truth optimal action hidden from model |
+| Safety Policy Violations | 0 | 43 | Zero violations | Enforced by deterministic policy engine |
+| Customer Fatigue Reduction | 1.44 contacts/recovery | 5.89 contacts/recovery | 75% fewer contacts | Unnecessary outreach prevented |
+
+*Note on Methodology: Financial recovery amounts and rates represent simulated outcomes generated under controlled test conditions using category-specific probability curves. They do not represent live merchant financial data.* Detailed logs are preserved in `docs/evaluation/ai_benchmark_report.md` and `data/scenarios/evaluation_results.json`.
+
+---
+
+## Boundaries and Limitations
+
+- **Buildathon Prototype**: This software is a submission prototype. It executes in synthetic simulation or Razorpay test mode; real monetary transactions and customer messaging are disabled.
+- **Voice Hardware Requirements**: Full neural voice synthesis and local Whisper transcription require external network access or local PyTorch/audio libraries. In standard environments, the system defaults to browser-based synthesis and mathematical tone mocks.
+- **External Webhooks**: Receiving live webhooks from the Razorpay dashboard in local development requires a reverse proxy (such as ngrok) to route traffic to port 8000.
+
+---
+
+## Repository Navigation
+
+- **Pitch and Demo Script**: [`docs/demo-script.md`](docs/demo-script.md)
+- **Defect Log and Remediation**: [`docs/qa/defects.md`](docs/qa/defects.md)
+- **Automated Verification Results**: [`docs/qa/verification-results.md`](docs/qa/verification-results.md)
+- **Feature Matrix and Coverage**: [`docs/qa/feature-matrix.md`](docs/qa/feature-matrix.md)
+- **Benchmark Evaluation Report**: [`docs/evaluation/ai_benchmark_report.md`](docs/evaluation/ai_benchmark_report.md)
+- **Razorpay Test Mode Guide**: [`docs/TEST_MODE_GUIDE.md`](docs/TEST_MODE_GUIDE.md)
+- **Safety Policy Specification**: [`docs/safety-policy.md`](docs/safety-policy.md)
+- **Security Threat Model**: [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md)

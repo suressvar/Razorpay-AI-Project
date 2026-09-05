@@ -269,49 +269,20 @@ export default function App() {
 
             <Space size="middle">
               {adminStatus?.kill_switch_active ? (
-                <div className="flex items-center gap-2 px-3 py-1 bg-red-50 border border-red-200 rounded-md">
-                  <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                  <span className="text-xs font-semibold text-red-800">Kill-Switch Active (Blocked)</span>
-                </div>
-              ) : adminStatus?.execution_mode === 'razorpay_test' ? (
-                <div className="flex items-center gap-2 px-3 py-1 bg-emerald-50 border border-emerald-200 rounded-md">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                  <span className="text-xs font-semibold text-emerald-800">Razorpay Test Mode Active</span>
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-red-50 border border-red-200 rounded-full shadow-sm">
+                  <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />
+                  <span className="text-xs font-semibold text-red-800">Kill-Switch Active</span>
                 </div>
               ) : (
-                <div className="flex items-center gap-2 px-3 py-1 bg-blue-50 border border-blue-200 rounded-md">
-                  <span className="w-2 h-2 rounded-full bg-blue-500" />
-                  <span className="text-xs font-semibold text-blue-800">Synthetic Simulation Mode</span>
+                <div className="flex items-center gap-2 px-3.5 py-1.5 bg-emerald-50 border border-emerald-200 rounded-full shadow-sm">
+                  <span className="relative flex h-2.5 w-2.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
+                  </span>
+                  <span className="text-xs font-bold text-emerald-800 tracking-wide">
+                    AI Agent
+                  </span>
                 </div>
-              )}
-
-              {/* Server-Side Operator Identity & Login Button */}
-              {operatorProfile ? (
-                <button
-                  onClick={() => setAuthModalOpen(true)}
-                  className="flex items-center gap-2 px-3 py-1 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg text-xs font-medium text-slate-800 transition-colors shadow-sm"
-                  title="Click to view operator identity or log out"
-                >
-                  <div className="w-5 h-5 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center text-[10px]">
-                    {operatorProfile.name.charAt(0)}
-                  </div>
-                  <span className="font-semibold">{operatorProfile.name}</span>
-                  <Tag
-                    color={operatorProfile.role === 'admin' ? 'gold' : operatorProfile.role === 'reviewer' ? 'blue' : 'default'}
-                    style={{ margin: 0, fontSize: 10, padding: '0 4px', lineHeight: '18px' }}
-                  >
-                    {operatorProfile.role.toUpperCase()}
-                  </Tag>
-                </button>
-              ) : (
-                <button
-                  onClick={() => setAuthModalOpen(true)}
-                  className="flex items-center gap-1.5 px-3 py-1 bg-amber-50 hover:bg-amber-100 border border-amber-300 rounded-lg text-xs font-bold text-amber-900 transition-all shadow-sm"
-                  title="Open operator login modal to authenticate"
-                >
-                  <UserSwitchOutlined className="text-amber-700" />
-                  <span>Operator Login</span>
-                </button>
               )}
             </Space>
           </Header>
