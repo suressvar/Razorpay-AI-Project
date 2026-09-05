@@ -29,6 +29,7 @@ from recovery_autopilot.persistence.models import (
     PaymentCaseRecord,
     PromiseToPayRecord,
     RecoveryActionRecord,
+    RecoveryLedgerRecord,
     UnmatchedWebhookRecord,
     VoiceSessionRecord,
     WebhookEventRecord,
@@ -199,7 +200,7 @@ class SqlAlchemyRepository(CaseRepositoryProtocol):
             if res:
                 return self._record_to_case(res), "order_id", order_id
 
-        # 5. Exact Subscription ID (only match active case for this subscription)
+        # 5. Exact Subscription ID (only match active case when it uniquely identifies the correct billing obligation)
         if subscription_id and subscription_id not in ("sub_unknown", ""):
             stmt = (
                 select(PaymentCaseRecord)
@@ -207,14 +208,37 @@ class SqlAlchemyRepository(CaseRepositoryProtocol):
                 .order_by(desc(PaymentCaseRecord.created_at))
             )
             records = (await self.session.execute(stmt)).scalars().all()
-            for r in records:
-                if r.status not in (CaseStatus.RECOVERED.value, CaseStatus.OPTED_OUT.value, CaseStatus.STOPPED.value):
-                    return self._record_to_case(r), "subscription_id", subscription_id
-            # If all cases are settled, return latest
-            if records:
+            active_records = [
+                r for r in records
+                if r.status not in (CaseStatus.RECOVERED.value, CaseStatus.OPTED_OUT.value, CaseStatus.STOPPED.value)
+            ]
+            if len(active_records) == 1:
+                return self._record_to_case(active_records[0]), "subscription_id", subscription_id
+            elif len(active_records) > 1:
+                # Ambiguous: multiple active billing obligations for this subscription
+                return None
+            elif len(records) == 1:
+                # Exactly one record exists for this subscription
                 return self._record_to_case(records[0]), "subscription_id", subscription_id
 
         return None
+
+    async def get_active_cases_for_subscription(self, subscription_id: str) -> List[PaymentCase]:
+        """Fetch all currently active (unsettled) cases for a subscription to evaluate ambiguity."""
+        stmt = (
+            select(PaymentCaseRecord)
+            .where(PaymentCaseRecord.subscription_id == subscription_id)
+            .where(
+                PaymentCaseRecord.status.notin_([
+                    CaseStatus.RECOVERED.value,
+                    CaseStatus.OPTED_OUT.value,
+                    CaseStatus.STOPPED.value,
+                ])
+            )
+            .order_by(desc(PaymentCaseRecord.created_at))
+        )
+        records = (await self.session.execute(stmt)).scalars().all()
+        return [self._record_to_case(r) for r in records]
 
     async def list_cases(
         self,
@@ -461,6 +485,100 @@ class SqlAlchemyRepository(CaseRepositoryProtocol):
         self.session.add(rec)
         await self.session.flush()
 
+    async def record_recovery_ledger(
+        self,
+        ledger_id: str,
+        case_id: str,
+        provider_payment_id: str,
+        event_id: str,
+        event_type: str,
+        amount_inr: float,
+        currency: str,
+        matched_field: str,
+        matched_value: str,
+        recovered_at: Optional[Any] = None,
+    ) -> tuple[bool, RecoveryLedgerRecord]:
+        """Record recovery in the immutable ledger.
+        
+        Returns (True, record) if newly inserted, or (False, existing_record) if provider_payment_id already exists.
+        Guarantees protection against distinct success events double-counting the same payment.
+        """
+        # 1. Check existing entry by unique provider payment id
+        stmt = select(RecoveryLedgerRecord).where(RecoveryLedgerRecord.provider_payment_id == provider_payment_id)
+        existing = (await self.session.execute(stmt)).scalar_one_or_none()
+        if existing:
+            return False, existing
+
+        # 2. Insert new ledger record
+        rec = RecoveryLedgerRecord(
+            ledger_id=ledger_id,
+            case_id=case_id,
+            provider_payment_id=provider_payment_id,
+            event_id=event_id,
+            event_type=event_type,
+            amount_inr=amount_inr,
+            currency=currency,
+            matched_field=matched_field,
+            matched_value=matched_value,
+            recovered_at=recovered_at or utc_now(),
+        )
+        self.session.add(rec)
+        try:
+            await self.session.flush()
+            return True, rec
+        except Exception:
+            # Handle concurrent race condition on unique index
+            await self.session.rollback()
+            stmt_retry = select(RecoveryLedgerRecord).where(RecoveryLedgerRecord.provider_payment_id == provider_payment_id)
+            existing_retry = (await self.session.execute(stmt_retry)).scalar_one_or_none()
+            if existing_retry:
+                return False, existing_retry
+            raise
+
+    async def get_recovery_by_payment_id(self, provider_payment_id: str) -> Optional[RecoveryLedgerRecord]:
+        """Fetch recovery ledger record by unique provider payment ID."""
+        stmt = select(RecoveryLedgerRecord).where(RecoveryLedgerRecord.provider_payment_id == provider_payment_id)
+        return (await self.session.execute(stmt)).scalar_one_or_none()
+
+    async def list_recovery_records(self, case_id: Optional[str] = None, limit: int = 100) -> List[RecoveryLedgerRecord]:
+        """List persisted recovery ledger entries."""
+        stmt = select(RecoveryLedgerRecord)
+        if case_id:
+            stmt = stmt.where(RecoveryLedgerRecord.case_id == case_id)
+        stmt = stmt.order_by(desc(RecoveryLedgerRecord.recovered_at)).limit(limit)
+        return list((await self.session.execute(stmt)).scalars().all())
+
+    async def cancel_pending_recovery_work(self, case_id: str) -> Dict[str, int]:
+        """Cancel pending recovery work once payment is confirmed.
+        
+        Cancels active promises to pay, ongoing voice sessions, and scheduled tasks.
+        """
+        from sqlalchemy import update
+        cancelled_counts = {"promises": 0, "voice_sessions": 0}
+
+        # 1. Cancel active promises to pay
+        stmt_ptp = (
+            update(PromiseToPayRecord)
+            .where(PromiseToPayRecord.case_id == case_id)
+            .where(PromiseToPayRecord.status == "ACTIVE")
+            .values(status="FULFILLED", notes="Automatically fulfilled upon confirmed payment")
+        )
+        res_ptp = await self.session.execute(stmt_ptp)
+        cancelled_counts["promises"] = res_ptp.rowcount or 0
+
+        # 2. Cancel/complete active voice sessions
+        stmt_voice = (
+            update(VoiceSessionRecord)
+            .where(VoiceSessionRecord.case_id == case_id)
+            .where(VoiceSessionRecord.state.notin_(["COMPLETED", "OPTED_OUT", "ESCALATED"]))
+            .values(state="COMPLETED", proposed_action="PAYMENT_CONFIRMED_CANCELLED")
+        )
+        res_voice = await self.session.execute(stmt_voice)
+        cancelled_counts["voice_sessions"] = res_voice.rowcount or 0
+
+        await self.session.flush()
+        return cancelled_counts
+
     async def clear_all_data(self) -> Dict[str, int]:
         """Delete all records across all tables for full sandbox/demo reset."""
         from sqlalchemy import delete
@@ -469,6 +587,7 @@ class SqlAlchemyRepository(CaseRepositoryProtocol):
         
         counts = {}
         for model, name in [
+            (RecoveryLedgerRecord, "recovery_ledger"),
             (RecoveryActionRecord, "recovery_actions"),
             (AuditEventRecord, "audit_events"),
             (PromiseToPayRecord, "promises_to_pay"),

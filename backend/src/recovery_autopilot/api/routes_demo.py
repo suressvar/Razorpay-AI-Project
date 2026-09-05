@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from recovery_autopilot.config import settings
@@ -42,19 +42,24 @@ class WebhookSimRequest(BaseModel):
 import logging
 from recovery_autopilot.config import get_settings
 
+from recovery_autopilot.security.rbac import require_admin
+
 logger = logging.getLogger("recovery_autopilot.api.routes_demo")
 
 
 @router.post("/seed")
-async def seed_demo_data(req: SeedRequest):
-    """Seed the database with synthetic cases for live demonstration."""
+async def seed_demo_data(
+    req: SeedRequest,
+    operator_id: str = Depends(require_admin),
+):
+    """Seed the database with synthetic cases for live demonstration (requires admin role)."""
     cfg = get_settings()
     if not cfg.SYNTHETIC_MODE and cfg.PAYMENT_EXECUTION_MODE == "production":
         raise HTTPException(status_code=403, detail="Demo seeding disabled in live production environments")
 
     try:
         count = await orchestrator.seed_demo_data(count=req.count, seed=req.seed)
-        return {"status": "success", "seeded_count": count, "seed": req.seed}
+        return {"status": "success", "seeded_count": count, "seed": req.seed, "authorized_by": operator_id}
     except Exception as e:
         logger.exception("Demo seeding error: %s", str(e))
         raise HTTPException(status_code=500, detail=f"Failed to seed demo data: {str(e)}")
@@ -62,15 +67,15 @@ async def seed_demo_data(req: SeedRequest):
 
 @router.post("/clear")
 @router.delete("/clear")
-async def clear_all_demo_data():
-    """Clear all records (payment cases, audit logs, webhooks, voice sessions) from the database."""
+async def clear_all_demo_data(operator_id: str = Depends(require_admin)):
+    """Clear all records from the database (requires admin role)."""
     cfg = get_settings()
     if not cfg.SYNTHETIC_MODE and cfg.PAYMENT_EXECUTION_MODE == "production":
         raise HTTPException(status_code=403, detail="Demo clearing disabled in live production environments")
 
     try:
         counts = await orchestrator.clear_all_data()
-        return {"status": "success", "deleted": counts}
+        return {"status": "success", "deleted": counts, "authorized_by": operator_id}
     except Exception as e:
         logger.exception("Demo data clearing error: %s", str(e))
         raise HTTPException(status_code=500, detail=f"Failed to clear demo data: {str(e)}")

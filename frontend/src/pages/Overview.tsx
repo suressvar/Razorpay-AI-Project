@@ -286,6 +286,8 @@ export default function Overview() {
                 label="Total Cases Ingested"
                 value={metrics.total_cases.toLocaleString('en-IN')}
                 icon={<ThunderboltOutlined />}
+                trend="neutral"
+                trendValue="Active webhook ingestion"
                 badgeColor="#0052cc"
               />
             </Col>

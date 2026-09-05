@@ -15,13 +15,15 @@ router = APIRouter(prefix="/cases", tags=["Cases"])
 
 
 class ApproveRequest(BaseModel):
-    operator_id: str = "ops_admin"
+    operator_id: Optional[str] = None
     notes: Optional[str] = None
+    action_version: Optional[int] = None
 
 
 class RejectRequest(BaseModel):
-    operator_id: str = "ops_admin"
+    operator_id: Optional[str] = None
     reason: str
+    action_version: Optional[int] = None
 
 
 @router.get("", response_model=List[Dict[str, Any]])
@@ -81,11 +83,23 @@ async def approve_case(
 
     workflow = orchestrator.create_workflow(repo)
     try:
-        effective_op = (req.operator_id if req else None) or operator_id or "ops_admin"
-        await workflow.handle_human_approval(case, operator_id=effective_op)
+        await workflow.handle_human_approval(
+            case,
+            operator_id=operator_id,
+            notes=req.notes if req else None,
+            action_version=req.action_version if req else None,
+        )
         await db.commit()
-        return {"status": "approved", "case_id": case_id, "new_status": case.status.value}
+        return {
+            "status": "approved",
+            "case_id": case_id,
+            "new_status": case.status.value,
+            "action_version": case.action_version,
+            "approved_by": operator_id,
+        }
     except ValueError as exc:
+        if "Stale approval" in str(exc) or "not AWAITING_APPROVAL" in str(exc):
+            raise HTTPException(status_code=409, detail=str(exc))
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Approval execution error: {str(exc)}")
@@ -106,11 +120,23 @@ async def reject_case(
 
     workflow = orchestrator.create_workflow(repo)
     try:
-        effective_op = (req.operator_id if req else None) or operator_id or "ops_admin"
-        await workflow.handle_human_rejection(case, operator_id=effective_op, reason=req.reason)
+        await workflow.handle_human_rejection(
+            case,
+            operator_id=operator_id,
+            reason=req.reason,
+            action_version=req.action_version,
+        )
         await db.commit()
-        return {"status": "rejected", "case_id": case_id, "new_status": case.status.value}
+        return {
+            "status": "rejected",
+            "case_id": case_id,
+            "new_status": case.status.value,
+            "action_version": case.action_version,
+            "rejected_by": operator_id,
+        }
     except ValueError as exc:
+        if "Stale rejection" in str(exc) or "not AWAITING_APPROVAL" in str(exc):
+            raise HTTPException(status_code=409, detail=str(exc))
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Rejection execution error: {str(exc)}")

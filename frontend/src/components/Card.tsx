@@ -49,8 +49,14 @@ export function KpiCard({
 }: KpiCardProps) {
   return (
     <AntCard
-      className="bg-white shadow-sm border border-slate-200 rounded-xl transition-all hover:shadow-md hover:border-blue-300"
-      bodyStyle={{ padding: '18px 20px' }}
+      className="h-full bg-white shadow-sm border border-slate-200 rounded-xl transition-all hover:shadow-md hover:border-blue-300 flex flex-col justify-between"
+      bodyStyle={{
+        padding: '18px 20px',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'space-between',
+        height: '100%',
+      }}
     >
       <div className="flex items-start justify-between">
         <div>
@@ -61,21 +67,28 @@ export function KpiCard({
             <span className="text-2xl font-bold text-slate-900 tracking-tight">{value}</span>
           </div>
           {sub && <p className="text-xs text-slate-500 mt-1 font-medium">{sub}</p>}
-          {trendValue && (
-            <div className="mt-2 flex items-center gap-1.5 text-xs font-semibold">
-              {trend === 'up' && <span className="text-emerald-600 flex items-center gap-0.5"><ArrowUpOutlined /> {trendValue}</span>}
-              {trend === 'down' && <span className="text-rose-600 flex items-center gap-0.5"><ArrowDownOutlined /> {trendValue}</span>}
-              {trend === 'neutral' && <span className="text-slate-500 flex items-center gap-0.5"><MinusOutlined /> {trendValue}</span>}
-            </div>
-          )}
         </div>
         {icon && (
           <div
-            className="w-10 h-10 rounded-lg flex items-center justify-center text-lg"
+            className="w-10 h-10 rounded-lg flex items-center justify-center text-lg flex-shrink-0"
             style={{ backgroundColor: `${badgeColor}15`, color: badgeColor }}
           >
             {icon}
           </div>
+        )}
+      </div>
+
+      <div className="mt-2.5 flex items-center gap-1.5 text-xs font-semibold min-h-[20px]">
+        {trendValue ? (
+          <>
+            {trend === 'up' && <span className="text-emerald-600 flex items-center gap-0.5"><ArrowUpOutlined /> {trendValue}</span>}
+            {trend === 'down' && <span className="text-rose-600 flex items-center gap-0.5"><ArrowDownOutlined /> {trendValue}</span>}
+            {trend === 'neutral' && <span className="text-slate-500 flex items-center gap-0.5"><MinusOutlined /> {trendValue}</span>}
+          </>
+        ) : (
+          <span className="text-slate-400 flex items-center gap-0.5 font-normal">
+            <MinusOutlined /> Real-time active
+          </span>
         )}
       </div>
     </AntCard>

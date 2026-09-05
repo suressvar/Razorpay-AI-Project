@@ -57,105 +57,22 @@ class RecoveryOrchestrator:
         event_id_header: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Validate, store, and process incoming Razorpay webhook with strict financial correlation."""
-        import hashlib
-
         # 1. Verify HMAC Signature
         self.webhook_verifier.verify(raw_body, signature)
 
         # 2. Parse event payload
         payload = json.loads(raw_body.decode("utf-8"))
-        event_name = payload.get("event", "unknown")
-        event_id = event_id_header or payload.get("id") or f"evt_{hashlib.sha256(raw_body).hexdigest()[:16]}"
-        payload_str = raw_body.decode("utf-8")
 
-        # 3. Idempotent Deduplication Check
-        async with async_session_factory() as session:
-            repo = SqlAlchemyRepository(session)
-            is_new = await repo.save_webhook_event(
-                event_id=event_id,
-                event_type=event_name,
-                signature=signature,
-                payload_json=payload_str,
-                status="received",
-            )
-            if not is_new:
-                logger.info("Ignoring duplicate webhook event %s", event_id)
-                return {"status": "duplicate_ignored", "event_id": event_id}
-            await session.commit()
+        # 3. Delegate to Unified Event Processor
+        from recovery_autopilot.services.event_processor import event_processor
 
-        # 4. Handle PAYMENT FAILURE events
-        if event_name in ("payment.failed", "order.paid.failed", "subscription.charged.failed"):
-            context = RazorpayEventMapper.map_payment_failed(payload)
-
-            async with async_session_factory() as session:
-                repo = SqlAlchemyRepository(session)
-                workflow = self.create_workflow(repo)
-                case = await workflow.process_failed_payment(context)
-                await repo.update_webhook_status(event_id, status="completed")
-                await session.commit()
-
-                return {
-                    "status": "processed",
-                    "event_id": event_id,
-                    "case_id": case.case_id,
-                    "case_status": case.status.value,
-                    "action": case.latest_action_result.action.value if case.latest_action_result else None,
-                }
-
-        # 5. Handle PAYMENT SUCCESS / RECOVERY CAPTURE events
-        if event_name in ("payment.captured", "order.paid", "subscription.charged", "payment.authorized"):
-            captured_ctx = RazorpayEventMapper.map_payment_captured(payload)
-
-            async with async_session_factory() as session:
-                repo = SqlAlchemyRepository(session)
-                match_result = await repo.get_case_by_exact_identifier(
-                    payment_id=captured_ctx.payment_id,
-                    payment_link_id=captured_ctx.payment_link_id,
-                    invoice_id=captured_ctx.invoice_id,
-                    order_id=captured_ctx.order_id,
-                    subscription_id=captured_ctx.subscription_id,
-                )
-
-                if not match_result:
-                    reason_msg = (
-                        f"Uncorrelatable success event: payment_id={captured_ctx.payment_id}, "
-                        f"order_id={captured_ctx.order_id}, sub_id={captured_ctx.subscription_id}, "
-                        f"plink_id={captured_ctx.payment_link_id}"
-                    )
-                    await repo.save_unmatched_event(
-                        event_id=event_id,
-                        event_type=event_name,
-                        payload_json=raw_body.decode("utf-8"),
-                        reason=reason_msg,
-                        signature=signature,
-                    )
-                    await repo.update_webhook_status(event_id, status="unmatched")
-                    await session.commit()
-                    return {"status": "unmatched_stored", "event_id": event_id, "reason": reason_msg}
-
-                case, matched_field, matched_value = match_result
-                workflow = self.create_workflow(repo)
-                outcome = await workflow.handle_payment_success(
-                    case=case,
-                    payment_id=captured_ctx.payment_id,
-                    amount_inr=captured_ctx.amount_inr,
-                    currency=captured_ctx.currency,
-                    matched_field=matched_field,
-                    matched_value=matched_value,
-                )
-                await repo.update_webhook_status(event_id, status="completed")
-                await session.commit()
-
-                return {
-                    "status": "recovered" if outcome.recovered else "held_for_review",
-                    "event_id": event_id,
-                    "case_id": case.case_id,
-                    "matched_by": matched_field,
-                    "matched_value": matched_value,
-                    "recovered_amount": outcome.recovered_amount,
-                }
-
-        return {"status": "accepted", "event_id": event_id, "event": event_name}
+        return await event_processor.process_event(
+            payload=payload,
+            raw_body=raw_body,
+            signature=signature,
+            event_id=event_id_header,
+            source="webhook",
+        )
 
     async def seed_demo_data(self, count: int = 50, seed: int = 42) -> int:
         """Seed database with synthetic failure cases and run through initial recovery workflow with simulated outcomes."""

@@ -24,8 +24,11 @@ wheels/
 htmlcov/
 .mypy_cache/
 .ruff_cache/
-*.sqlite3
-*.db
+*.sqlite3*
+*.db*
+*.wal
+*.shm
+.server_secrets.json
 
 # Virtual Environments
 .venv/
@@ -41,6 +44,8 @@ frontend/coverage/
 
 # Environment and Secrets
 .env
+.env.*
+!.env.example
 *.local
 *.pem
 *.key

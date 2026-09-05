@@ -409,9 +409,22 @@ class VoiceSessionManager:
             session.state = VoiceSessionState.AWAITING_CONFIRMATION
             session.audit_log.append("Customer requested payment link. Awaiting confirmation.")
         elif analysis.detected_intent == VoiceIntent.CONFIRM_YES:
-            session.state = VoiceSessionState.EXECUTING_ACTION
-            session.action_executed = "PAYMENT_LINK_SENT"
-            session.audit_log.append("Customer confirmed action. Executed payment link dispatch.")
+            if session.state != VoiceSessionState.AWAITING_CONFIRMATION:
+                # Reject generic 'yes' when no valid proposal exists
+                session.state = VoiceSessionState.CLARIFICATION
+                session.audit_log.append("Customer said 'yes' but no pending proposal was active. Prompted for clarification.")
+                clarify_msg = {
+                    "english": "Could you please clarify what you would like to do? I can send you a payment link or schedule a promise to pay.",
+                    "hi-IN": "कृपया स्पष्ट करें कि आप क्या करना चाहते हैं? मैं आपको पेमेंट लिंक भेज सकता हूँ या प्रॉमिस टू पे शेड्यूल कर सकता हूँ।",
+                }
+                analysis.agent_response = clarify_msg.get(effective_language.value, clarify_msg["english"])
+                analysis.agent_response_english = clarify_msg["english"]
+                analysis.response_language = effective_language
+            else:
+                session.state = VoiceSessionState.EXECUTING_ACTION
+                session.action_executed = "PAYMENT_LINK_SENT"
+                session.audit_log.append("Customer confirmed action. Executed payment link dispatch.")
+
         elif analysis.detected_intent == VoiceIntent.UNCLEAR:
             session.clarification_attempts += 1
             if session.clarification_attempts >= 3:
@@ -505,5 +518,42 @@ class VoiceSessionManager:
         session = await self.get_session(session_id)
         if session:
             session.turns = []
-            session.audit_log.append("Transcript purged upon customer privacy request.")
-        return await self.repository.delete_voice_transcript(session_id)
+            session.audit_log.append("Privacy action: customer voice transcripts purged.")
+            session.updated_at = utc_now()
+            await self.repository.save_voice_session(session.to_record())
+            return True
+        return False
+
+    async def interrupt(self, session_id: str) -> VoiceSession:
+        """Interrupts agent playback, cancels ongoing speech, and enters listening state."""
+        session = await self.get_session(session_id)
+        if not session:
+            raise ValueError(f"Session {session_id} not found")
+        session.audit_log.append("Agent playback interrupted by customer speech. Immediate listening engaged.")
+        session.updated_at = utc_now()
+        await self.repository.save_voice_session(session.to_record())
+        return session
+
+    async def apply_text_correction(
+        self,
+        session_id: str,
+        corrected_text: str,
+        field_name: Optional[str] = None,
+    ) -> VoiceSession:
+        """Applies customer text correction or fallback when speech is misheard."""
+        session = await self.get_session(session_id)
+        if not session:
+            raise ValueError(f"Session {session_id} not found")
+        session.audit_log.append(f"Customer applied text correction: '{corrected_text}' ({field_name or 'input'})")
+        session.turns.append(
+            VoiceTurn(
+                turn_id=f"turn_{uuid.uuid4().hex[:8]}",
+                role=VoiceTurnRole.CUSTOMER,
+                text=corrected_text,
+                language=session.preferred_language,
+                confidence_score=1.0,
+            )
+        )
+        session.updated_at = utc_now()
+        await self.repository.save_voice_session(session.to_record())
+        return session

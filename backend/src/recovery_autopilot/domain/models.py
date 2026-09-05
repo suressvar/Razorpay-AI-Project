@@ -158,7 +158,8 @@ class PaymentCase(BaseModel):
     latest_action_result: Optional[ExecutionResult] = Field(None, description="Latest execution result")
     promise_to_pay: Optional[PromiseToPay] = Field(None, description="Active Promise-to-Pay arrangement if negotiated")
     outcome: Optional[PaymentOutcome] = Field(None, description="Final outcome if completed")
-    contact_count: int = Field(0, ge=0, description="Number of customer contacts sent so far")
+    action_version: int = Field(1, description="Sequential action proposal version for binding human approvals")
+    contact_count: int = Field(0, ge=0, description="Number of recovery outreach contacts made")
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
 

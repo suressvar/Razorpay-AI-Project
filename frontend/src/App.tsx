@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { Layout, Menu, ConfigProvider, Tag, Typography, Space, Select, Switch } from 'antd';
 import {
@@ -17,17 +17,19 @@ import {
 import { RazorpayLogo } from './components/RazorpayLogo';
 import { RazorpayRouteLoader } from './components/RazorpayLoader';
 import { fetchAdminStatus } from './api';
-import Overview from './pages/Overview';
-import Cases from './pages/Cases';
-import CaseDetail from './pages/CaseDetail';
-import HumanReview from './pages/HumanReview';
-import Evaluation from './pages/Evaluation';
-import Copilot from './pages/Copilot';
-import UnmatchedEvents from './pages/UnmatchedEvents';
-import AccountSettings from './pages/AccountSettings';
-import CustomerIssues from './pages/CustomerIssues';
-import IssueDetail from './pages/IssueDetail';
-import EmailCompose from './pages/EmailCompose';
+
+const Overview = lazy(() => import('./pages/Overview'));
+const Cases = lazy(() => import('./pages/Cases'));
+const CaseDetail = lazy(() => import('./pages/CaseDetail'));
+const HumanReview = lazy(() => import('./pages/HumanReview'));
+const Evaluation = lazy(() => import('./pages/Evaluation'));
+const Copilot = lazy(() => import('./pages/Copilot'));
+const UnmatchedEvents = lazy(() => import('./pages/UnmatchedEvents'));
+const AccountSettings = lazy(() => import('./pages/AccountSettings'));
+const CustomerIssues = lazy(() => import('./pages/CustomerIssues'));
+const IssueDetail = lazy(() => import('./pages/IssueDetail'));
+const EmailCompose = lazy(() => import('./pages/EmailCompose'));
+
 
 const { Header, Content, Sider } = Layout;
 const { Text } = Typography;
@@ -284,21 +286,24 @@ export default function App() {
 
           {/* Page Content */}
           <Content style={{ padding: '24px 28px', minHeight: 'calc(100vh - 60px)' }}>
-            <Routes>
-              <Route path="/" element={<Overview />} />
-              <Route path="/copilot" element={<Copilot />} />
-              <Route path="/issues" element={<CustomerIssues />} />
-              <Route path="/issues/:issueId" element={<IssueDetail />} />
-              <Route path="/email/compose" element={<EmailCompose />} />
-              <Route path="/email/compose/:draftId" element={<EmailCompose />} />
-              <Route path="/cases" element={<Cases />} />
-              <Route path="/cases/:caseId" element={<CaseDetail />} />
-              <Route path="/review" element={<HumanReview />} />
-              <Route path="/unmatched" element={<UnmatchedEvents />} />
-              <Route path="/evaluation" element={<Evaluation />} />
-              <Route path="/settings" element={<AccountSettings />} />
-            </Routes>
+            <Suspense fallback={<RazorpayRouteLoader />}>
+              <Routes>
+                <Route path="/" element={<Overview />} />
+                <Route path="/copilot" element={<Copilot />} />
+                <Route path="/issues" element={<CustomerIssues />} />
+                <Route path="/issues/:issueId" element={<IssueDetail />} />
+                <Route path="/email/compose" element={<EmailCompose />} />
+                <Route path="/email/compose/:draftId" element={<EmailCompose />} />
+                <Route path="/cases" element={<Cases />} />
+                <Route path="/cases/:caseId" element={<CaseDetail />} />
+                <Route path="/review" element={<HumanReview />} />
+                <Route path="/unmatched" element={<UnmatchedEvents />} />
+                <Route path="/evaluation" element={<Evaluation />} />
+                <Route path="/settings" element={<AccountSettings />} />
+              </Routes>
+            </Suspense>
           </Content>
+
         </Layout>
       </Layout>
     </ConfigProvider>

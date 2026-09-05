@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from recovery_autopilot.api import (
     admin_router,
+    auth_router,
     cases_router,
     copilot_router,
     copilot_v2_router,
@@ -31,6 +32,11 @@ logger = logging.getLogger("recovery_autopilot.main")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan context for initialization and teardown."""
+    from recovery_autopilot.services.settings_manager import settings_manager
+
+    # Load persisted settings and rebuild clients on startup
+    settings_manager.load_persisted_settings()
+
     logger.info("Starting up %s (Environment: %s, Model: %s, Mode: %s)", settings.APP_NAME, settings.ENVIRONMENT, settings.MODEL_PROVIDER, settings.PAYMENT_EXECUTION_MODE)
     await init_db()
 
@@ -93,6 +99,7 @@ async def health_check():
 
 
 # Register feature routers
+app.include_router(auth_router)
 app.include_router(webhooks_router)
 app.include_router(cases_router)
 app.include_router(copilot_router)

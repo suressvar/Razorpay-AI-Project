@@ -151,6 +151,18 @@ export interface CategoryMetric {
 export interface BenchmarkReport {
   dataset_size: number;
   random_seed: number;
+  dataset_version?: string;
+  prompts_version?: string;
+  model_provider?: string;
+  model_identifier?: string;
+  is_synthetic_simulation?: boolean;
+  dev_dataset_size?: number;
+  held_out_dataset_size?: number;
+  action_accuracy_pct?: number;
+  escalation_precision_pct?: number;
+  escalation_recall_pct?: number;
+  policy_violations_count?: number;
+  assumptions_note?: string;
   agent_total_inr_recovered: number;
   agent_recovery_rate: number;
   agent_median_recovery_time_hours: number;

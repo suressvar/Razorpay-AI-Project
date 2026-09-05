@@ -34,7 +34,11 @@ async def test_demo_seed_and_list_cases():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         # 1. Seed demo cases
-        seed_resp = await client.post("/demo/seed", json={"count": 10, "seed": 42})
+        seed_resp = await client.post(
+            "/demo/seed",
+            json={"count": 10, "seed": 42},
+            headers={"Authorization": "Bearer auth_token_admin_recovery_v1"},
+        )
         assert seed_resp.status_code == 200
         assert seed_resp.json()["seeded_count"] == 10
 
@@ -140,10 +144,17 @@ async def test_demo_clear_endpoint():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         # Seed 5 cases
-        await client.post("/demo/seed", json={"count": 5, "seed": 99})
+        await client.post(
+            "/demo/seed",
+            json={"count": 5, "seed": 99},
+            headers={"Authorization": "Bearer auth_token_admin_recovery_v1"},
+        )
 
         # Clear all data
-        clear_resp = await client.post("/demo/clear")
+        clear_resp = await client.post(
+            "/demo/clear",
+            headers={"Authorization": "Bearer auth_token_admin_recovery_v1"},
+        )
         assert clear_resp.status_code == 200
         data = clear_resp.json()
         assert data["status"] == "success"

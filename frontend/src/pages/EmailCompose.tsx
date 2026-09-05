@@ -156,7 +156,7 @@ export default function EmailCompose() {
           <p className="text-xs text-slate-500">Duplicate prevention prevents multiple deliveries of this message.</p>
         </div>
       ),
-      okText: 'Confirm & Send Email',
+      okText: 'Authorize Simulated Dispatch',
       cancelText: 'Cancel',
       okButtonProps: { style: { background: '#0052cc' } },
       onOk: async () => {
@@ -179,12 +179,12 @@ export default function EmailCompose() {
           const res = await sendEmailDraft(draftToUse.draft_id);
           setSendResult(res);
           if (res.is_duplicate) {
-            message.warning('Email already sent. Duplicate send prevented.');
+            message.warning('Email already sent. Duplicate simulated dispatch prevented.');
           } else {
-            message.success('Email successfully dispatched to recipient.');
+            message.success('Simulated email dispatch recorded successfully (no real email transmitted).');
           }
         } catch (err: any) {
-          message.error(err.message || 'Failed to dispatch email');
+          message.error(err.message || 'Failed to record simulated email');
         } finally {
           setSending(false);
         }

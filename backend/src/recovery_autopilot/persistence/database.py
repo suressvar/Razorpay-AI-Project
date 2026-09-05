@@ -56,6 +56,7 @@ async def init_db() -> None:
             "ALTER TABLE webhook_events ADD COLUMN last_error TEXT",
             "ALTER TABLE webhook_events ADD COLUMN locked_at TIMESTAMP",
             "ALTER TABLE webhook_events ADD COLUMN lease_expires_at TIMESTAMP",
+            "ALTER TABLE webhook_events ADD COLUMN worker_lease_token VARCHAR(64)",
         ]
         for stmt in migration_statements:
             try:

@@ -108,43 +108,51 @@ To connect Recovery Autopilot to your real Razorpay Test Account:
 Run the scientific benchmark evaluation comparing Recovery Autopilot against standard merchant baseline strategies:
 
 ```bash
-# Run benchmark on 500 cases with seed 42
-python scripts/run_evaluation.py --size 500 --seed 42
+# Run full deterministic benchmark on 500 cases with seed 42
+python -m pytest backend/tests/integration/test_prompt9_evaluation_benchmark.py
 ```
 
-### Benchmark Results Summary (500 cases, seed=42)
+### Benchmark Results Summary (500 cases, seed=42, 80/20 train/held-out split)
 
-| Strategy | Recovery Rate (95% CI) | Total Recovered (INR) | Median Hours | Safety Violations |
-| :--- | :--- | :--- | :--- | :--- |
-| **Recovery Autopilot** | **74.00%** `[69.8%, 77.6%]` | **₹2,845,610** | **8.5 hrs** | **0 (Zero Violations)** |
-| **Fixed Retry Baseline** | 19.20% `[15.6%, 22.8%]` | ₹382,140 | 22.0 hrs | — |
-| **Simple Rule Baseline** | 48.60% `[44.2%, 53.0%]` | ₹1,820,450 | 14.0 hrs | — |
-| **Incremental Lift** | **+54.80 percentage points** | **+₹2,463,470 (+644%)** | **61% Faster** | **Guaranteed Safe** |
+| Strategy | Recovery Rate (95% CI) | Simulated Recovery (INR) | Median Hours | Safety Violations | Action Accuracy |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Recovery Autopilot** | **69.4%** `[65.6%, 73.4%]` | **₹2,531,640** | **8.5 hrs** | **0 (Zero Violations)** | **98.4%** |
+| **Fixed Retry Baseline** | 17.2% `[13.8%, 20.6%]` | ₹406,111 | 22.0 hrs | 43 violations | — |
+| **Incremental Lift** | **+52.2 percentage points** | **+₹2,125,528** | **Faster cycle** | **Guaranteed Safe** | **100% Esc. Precision** |
 
-Detailed report and category breakdowns saved in [`docs/BENCHMARK_REPORT.md`](docs/BENCHMARK_REPORT.md).
+*Note: Financial metrics reflect simulated recovery on synthetic test scenarios under laboratory conditions; they do not represent real merchant revenue.*
+
+Detailed report and category breakdowns saved in [`docs/evaluation/ai_benchmark_report.md`](docs/evaluation/ai_benchmark_report.md) and [`data/scenarios/evaluation_results.json`](data/scenarios/evaluation_results.json).
+
+---
+
+##  Demonstration & Pitch Script
+
+A complete 5-minute judge walkthrough script is available at [`docs/demo-script.md`](docs/demo-script.md).
+The comprehensive verification matrix is documented in [`docs/qa/final-readiness-report.md`](docs/qa/final-readiness-report.md).
 
 ---
 
 ##  Security, Safety & RBAC
 
-- **Safety Policy Engine**: 9 deterministic guardrail rules prevent any unsafe or unauthorized LLM actions.
-- **Role-Based Access Control (RBAC)**:
+- **Safety Policy Engine**: Deterministic guardrail rules prevent any unsafe or unauthorized LLM actions.
+- **Server-Side Authentication & RBAC**:
   - `viewer`: Read-only access to dashboard and cases.
-  - `reviewer`: Allowed to approve/reject cases held in human review queue.
+  - `reviewer`: Allowed to approve/reject cases held in human review queue (bound to `action_version`).
   - `admin`: Allowed to toggle emergency kill-switch and alter operational settings.
-- **Emergency Kill Switch**: `POST /admin/kill-switch` instantly pauses all outbound recovery communications.
-- **PII Redaction**: Customer emails and phone numbers are automatically sanitized before appearing in audit logs or UI outputs.
-- **Threat Model**: Complete review of threat surfaces and mitigations in [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md).
+- **Emergency Kill Switch**: `POST /admin/kill-switch` instantly halts all outbound recovery actions immediately before side effects.
+- **PII Redaction**: Customer emails (`sid***@example.com`) and phone numbers (`+91****210`) are automatically masked in audit logs.
+- **Credential Exposure Inventory**: Detailed in [`docs/security/credential-exposure-inventory.md`](docs/security/credential-exposure-inventory.md).
 
 ---
 
 ##  Test Suite Execution
 
-Run the complete test suite across contracts, guardrails, state machine, payment correlation, async queue, and test mode:
+Run the complete test suite across accounting, webhooks, settings, RBAC, speech recognition, speech synthesis, voice state machines, and evaluation:
 
 ```bash
-# Backend pytest suite (70+ unit & integration tests)
-pytest backend/tests -v
+# Backend pytest suite (134 unit & integration tests passing in ~30s)
+cd backend && python -m pytest tests/unit tests/integration
 
 # Frontend TypeScript check and production build
 cd frontend && npm run build

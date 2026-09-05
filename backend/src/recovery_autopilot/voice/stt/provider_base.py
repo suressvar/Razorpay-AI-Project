@@ -27,7 +27,7 @@ class STTAlternative(BaseModel):
 class STTResult(BaseModel):
     transcript: str
     detected_language: str = "en-IN"
-    confidence: float = 1.0
+    confidence: Optional[float] = None
     word_timestamps: List[STTWordTimestamp] = Field(default_factory=list)
     alternatives: List[STTAlternative] = Field(default_factory=list)
     latency_ms: float = 0.0

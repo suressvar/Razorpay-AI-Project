@@ -15,14 +15,15 @@ from recovery_autopilot.config import get_settings
 from recovery_autopilot.persistence.database import get_db
 from recovery_autopilot.persistence.repository import SqlAlchemyRepository
 from recovery_autopilot.voice.evaluator import VoiceRecoveryEvaluator
-from recovery_autopilot.voice.stt.local_provider import LocalMultilingualSTTProvider
+from recovery_autopilot.voice.stt import get_stt_provider
 from recovery_autopilot.voice.tts import (
-    LocalMultilingualTTSProvider,
     PronunciationBenchmarkRunner,
     TTSModelTier,
     TTSRequest as CoreTTSRequest,
     VOICE_REGISTRY,
+    get_tts_provider,
 )
+from recovery_autopilot.voice.tts.review_gallery import GalleryRating, gallery_store
 from recovery_autopilot.voice.voice_models import (
     AudioDiagnostics,
     LanguageDetected,
@@ -33,10 +34,11 @@ from recovery_autopilot.voice.voice_session import VOICE_SCENARIOS, VoiceSession
 
 router = APIRouter(prefix="/voice", tags=["Voice Recovery Agent"])
 
-# Global in-process STT & TTS provider instances
-stt_engine = LocalMultilingualSTTProvider()
-tts_engine = LocalMultilingualTTSProvider()
+# Global provider instances with real neural models preferred
+stt_engine = get_stt_provider(prefer_real=True)
+tts_engine = get_tts_provider(prefer_neural=True)
 benchmark_runner = PronunciationBenchmarkRunner()
+
 
 
 class SynthesizeTTSRequest(BaseModel):
@@ -289,8 +291,45 @@ async def delete_voice_transcript(
     return {"session_id": session_id, "deleted": success, "message": "Transcript permanently purged"}
 
 
+@router.post("/sessions/{session_id}/interrupt", response_model=Dict[str, Any])
+async def interrupt_voice_session(
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Halts ongoing agent voice playback and transitions session back into active listening."""
+    repo = SqlAlchemyRepository(db)
+    manager = VoiceSessionManager(repo)
+    try:
+        session = await manager.interrupt(session_id)
+        return {"status": "interrupted", "session": session.to_dict()}
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+class TextCorrectionRequest(BaseModel):
+    corrected_text: str = Field(..., min_length=1, description="Customer-corrected text")
+    field_name: Optional[str] = Field(None, description="Optional target field, e.g. amount, date, phone")
+
+
+@router.post("/sessions/{session_id}/correct-text", response_model=Dict[str, Any])
+async def correct_session_text(
+    session_id: str,
+    req: TextCorrectionRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Applies customer text correction or text fallback when acoustic speech is misheard."""
+    repo = SqlAlchemyRepository(db)
+    manager = VoiceSessionManager(repo)
+    try:
+        session = await manager.apply_text_correction(session_id, req.corrected_text, req.field_name)
+        return {"status": "corrected", "session": session.to_dict()}
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
 # ---------------------------------------------------------
 # Multilingual Text-to-Speech (TTS) Endpoints
+
 # ---------------------------------------------------------
 
 @router.get("/tts/voices", response_model=List[Dict[str, Any]])
@@ -347,3 +386,51 @@ async def check_demo_readiness():
     checker = VoiceReadinessChecker()
     report = await checker.run_readiness_audit()
     return report
+
+
+# ---------------------------------------------------------
+# Audio Review Gallery & Evaluator Rating Endpoints
+# ---------------------------------------------------------
+
+@router.get("/gallery", response_model=List[Dict[str, Any]])
+async def get_audio_review_gallery():
+    """Returns audio review gallery items enriched with real native-speaker review evaluations."""
+    return gallery_store.get_gallery_items()
+
+
+@router.post("/gallery/rate", response_model=Dict[str, Any])
+async def submit_gallery_rating(rating: GalleryRating):
+    """Submits an authentic evaluator review rating (1-5 scale) with evaluator identity."""
+    return gallery_store.record_rating(rating)
+
+
+@router.get("/gallery/{item_id}/audio")
+async def get_gallery_sample_audio(item_id: str):
+    """Generates genuine speech audio for a gallery sample in its native language."""
+    items = gallery_store.get_gallery_items()
+    sample = next((it for it in items if it["id"] == item_id), None)
+    if not sample:
+        raise HTTPException(status_code=404, detail=f"Gallery sample {item_id} not found")
+
+    lang_map = {
+        "hi-IN": LanguageDetected.HINDI,
+        "en-IN": LanguageDetected.ENGLISH,
+        "kn-IN": LanguageDetected.KANNADA,
+        "ta-IN": LanguageDetected.TAMIL,
+        "te-IN": LanguageDetected.TELUGU,
+        "mr-IN": LanguageDetected.MARATHI,
+        "bn-IN": LanguageDetected.BENGALI,
+    }
+    lang = lang_map.get(sample["language"], LanguageDetected.ENGLISH)
+    req = CoreTTSRequest(text=sample["text"], language=lang, voice_id=sample.get("voice_id"))
+    res = await tts_engine.synthesize(req)
+    return {
+        "item_id": item_id,
+        "language": sample["language"],
+        "voice_id": res.voice_id,
+        "audio_base64": res.audio_base64,
+        "audio_format": res.audio_format,
+        "text_spoken": res.text_spoken,
+        "duration_sec": res.duration_sec,
+    }
+

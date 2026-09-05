@@ -3,7 +3,7 @@
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -53,8 +53,19 @@ class UnifiedActionExecutor(ActionExecutorProtocol):
         case: PaymentCase,
         action: RecoveryAction,
         customer_message: Optional[str] = None,
+        session: Optional[Any] = None,
     ) -> ExecutionResult:
-        """Execute action in safe sandbox mode."""
+        """Execute action in safe sandbox mode with immediate emergency kill-switch verification."""
+        from recovery_autopilot.config import settings
+
+        if settings.KILL_SWITCH_ACTIVE:
+            logger.warning("Emergency Kill Switch is ACTIVE. Halting execution for case %s.", case.case_id)
+            return ExecutionResult(
+                action=action,
+                status="BLOCKED_BY_KILL_SWITCH",
+                error="Emergency Kill Switch is active. All recovery side effects halted.",
+            )
+
         ctx = case.context
 
         if action == RecoveryAction.WAIT_FOR_RETRY:
@@ -67,7 +78,7 @@ class UnifiedActionExecutor(ActionExecutorProtocol):
 
         elif action == RecoveryAction.SEND_PAYMENT_LINK:
             # 1. Create payment link
-            result = await self.payment_link_adapter.create_payment_link(case, description=customer_message)
+            result = await self.payment_link_adapter.create_payment_link(case, description=customer_message, session=session)
             link_url = result.metadata.get("short_url", "https://rzp.io/test")
 
             # 2. Store simulated WhatsApp/Email preview

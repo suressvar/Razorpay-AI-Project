@@ -11,7 +11,27 @@ import {
 
 const API_BASE = '';
 
+let currentAuthToken = localStorage.getItem('recovery_auth_token') || 'auth_token_admin_recovery_v1';
+
+export function getAuthToken(): string {
+  return currentAuthToken;
+}
+
+export function setAuthToken(token: string) {
+  currentAuthToken = token;
+  localStorage.setItem('recovery_auth_token', token);
+}
+
+export function getAuthHeaders(extraHeaders: Record<string, string> = {}): Record<string, string> {
+  return {
+    'Accept': 'application/json',
+    'Authorization': `Bearer ${currentAuthToken}`,
+    ...extraHeaders,
+  };
+}
+
 async function handleResponseError(res: Response, fallbackMessage: string): Promise<never> {
+
   let errMsg = fallbackMessage;
   try {
     const err = await res.json();
@@ -94,15 +114,19 @@ export async function fetchCaseNotifications(caseId: string): Promise<Notificati
   return res.json();
 }
 
-export async function approveCase(caseId: string, operatorId: string = 'ops_admin'): Promise<any> {
+export async function approveCase(
+  caseId: string,
+  operatorId: string = 'ops_admin',
+  actionVersion: number = 1
+): Promise<any> {
   const res = await fetch(`${API_BASE}/cases/${caseId}/approve`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Operator-Role': 'admin',
-      'X-Operator-Id': operatorId,
-    },
-    body: JSON.stringify({ operator_id: operatorId }),
+    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({
+      operator_id: operatorId,
+      action_version: actionVersion,
+      notes: 'Approved via web operator console',
+    }),
   });
   if (!res.ok) {
     await handleResponseError(res, 'Approval failed');
@@ -113,16 +137,17 @@ export async function approveCase(caseId: string, operatorId: string = 'ops_admi
 export async function rejectCase(
   caseId: string,
   reason: string,
-  operatorId: string = 'ops_admin'
+  operatorId: string = 'ops_admin',
+  actionVersion: number = 1
 ): Promise<any> {
   const res = await fetch(`${API_BASE}/cases/${caseId}/reject`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Operator-Role': 'admin',
-      'X-Operator-Id': operatorId,
-    },
-    body: JSON.stringify({ operator_id: operatorId, reason }),
+    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({
+      operator_id: operatorId,
+      reason,
+      action_version: actionVersion,
+    }),
   });
   if (!res.ok) {
     await handleResponseError(res, 'Rejection failed');
@@ -133,11 +158,7 @@ export async function rejectCase(
 export async function retryCaseNow(caseId: string): Promise<any> {
   const res = await fetch(`${API_BASE}/cases/${caseId}/retry`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Operator-Role': 'admin',
-      'X-Operator-Id': 'ops_admin',
-    },
+    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
   });
   if (!res.ok) {
     await handleResponseError(res, 'Retry failed');
@@ -149,7 +170,7 @@ export async function retryCaseNow(caseId: string): Promise<any> {
 export async function seedDemoData(count: number = 50, seed: number = 42): Promise<any> {
   const res = await fetch(`${API_BASE}/demo/seed`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ count, seed }),
   });
   if (!res.ok) {
@@ -161,13 +182,14 @@ export async function seedDemoData(count: number = 50, seed: number = 42): Promi
 export async function clearAllDemoData(): Promise<any> {
   const res = await fetch(`${API_BASE}/demo/clear`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
   });
   if (!res.ok) {
     await handleResponseError(res, 'Failed to clear application demo data');
   }
   return res.json();
 }
+
 
 
 export async function triggerEvaluationRun(size: number = 500, seed: number = 42): Promise<BenchmarkReport> {
@@ -420,10 +442,7 @@ export async function updateAccountSettings(
 ): Promise<any> {
   const res = await fetch(`${API_BASE}/admin/settings`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Operator-Id': operatorId,
-    },
+    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(payload),
   });
   if (!res.ok) {
@@ -440,10 +459,7 @@ export async function toggleKillSwitch(
 ): Promise<any> {
   const res = await fetch(`${API_BASE}/admin/kill-switch`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Operator-Id': operatorId,
-    },
+    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ active, reason }),
   });
   if (!res.ok) {
@@ -452,6 +468,42 @@ export async function toggleKillSwitch(
   }
   return res.json();
 }
+
+export async function runGatewaySmokeTest(): Promise<any> {
+  const res = await fetch(`${API_BASE}/admin/gateway/smoke-test`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.detail || 'Gateway smoke test failed');
+  }
+  return res.json();
+}
+
+export async function fetchAudioGallery(): Promise<any[]> {
+  const res = await fetch(`${API_BASE}/voice/gallery`);
+  if (!res.ok) throw new Error('Failed to fetch audio gallery');
+  return res.json();
+}
+
+export async function submitAudioRating(rating: {
+  item_id: string;
+  evaluator_name: string;
+  native_speaker: boolean;
+  intelligibility_rating: number;
+  naturalness_rating: number;
+  comments?: string;
+}): Promise<any> {
+  const res = await fetch(`${API_BASE}/voice/gallery/rate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(rating),
+  });
+  if (!res.ok) throw new Error('Failed to submit audio rating');
+  return res.json();
+}
+
 
 export async function testAIModelInference(params: {
   error_code?: string;

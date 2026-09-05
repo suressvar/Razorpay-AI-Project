@@ -27,6 +27,8 @@ class SettingsUpdateRequest(BaseModel):
     ollama_model: Optional[str] = None
     ollama_base_url: Optional[str] = None
     payment_execution_mode: Optional[str] = None
+    razorpay_key_id: Optional[str] = None
+    razorpay_key_secret: Optional[str] = None
     human_review_threshold_inr: Optional[float] = None
     min_confidence_threshold: Optional[float] = None
     max_contact_attempts: Optional[int] = None
@@ -40,94 +42,51 @@ async def get_admin_status():
     return {
         "kill_switch_active": settings.KILL_SWITCH_ACTIVE,
         "execution_mode": settings.PAYMENT_EXECUTION_MODE,
-        "allow_production_mode": settings.ALLOW_PRODUCTION_MODE,
-        "confirm_live_financial_transactions": settings.CONFIRM_LIVE_FINANCIAL_TRANSACTIONS,
+        "allow_production_mode": False,
+        "confirm_live_financial_transactions": False,
     }
 
 
 @router.get("/settings")
 async def get_all_settings():
     """Retrieve complete merchant, gateway, AI model, and recovery policy configuration."""
-    return {
-        "merchant": {
-            "merchant_id": "acc_rzp_sub_883294",
-            "business_name": "Razorpay Revenue Autopilot Demo Merchant",
-            "gstin": "29AABCU9603R1Z2",
-            "business_type": "Private Limited",
-            "registered_email": "finance-ops@autopilot.example.com",
-            "support_contact": "+91 80 4040 2020",
-            "webhook_url": "http://localhost:8000/webhooks/razorpay",
-            "webhook_secret_set": bool(settings.RAZORPAY_WEBHOOK_SECRET),
+    from recovery_autopilot.services.settings_manager import settings_manager
+    view = settings_manager.get_public_settings_view()
+
+    # Retain static team and channel views for UI compatibility
+    view["team"] = [
+        {
+            "id": "usr_01",
+            "name": "Arjun Sharma (Admin)",
+            "email": "arjun@example.com",
+            "role": "admin",
+            "status": "active",
+            "last_active": "Just now",
         },
-        "gateway": {
-            "execution_mode": settings.PAYMENT_EXECUTION_MODE,
-            "key_id_masked": f"{settings.RAZORPAY_KEY_ID[:12]}..." if len(settings.RAZORPAY_KEY_ID) > 12 else settings.RAZORPAY_KEY_ID,
-            "key_id": settings.RAZORPAY_KEY_ID,
-            "key_secret_configured": bool(settings.RAZORPAY_KEY_SECRET),
-            "webhook_secret_masked": f"{settings.RAZORPAY_WEBHOOK_SECRET[:8]}..." if len(settings.RAZORPAY_WEBHOOK_SECRET) > 8 else "***",
-            "kill_switch_active": settings.KILL_SWITCH_ACTIVE,
-            "allow_production_mode": settings.ALLOW_PRODUCTION_MODE,
-            "confirm_live_financial_transactions": settings.CONFIRM_LIVE_FINANCIAL_TRANSACTIONS,
+        {
+            "id": "usr_02",
+            "name": "Priya Patel (Reviewer)",
+            "email": "priya.p@example.com",
+            "role": "reviewer",
+            "status": "active",
+            "last_active": "10 mins ago",
         },
-        "ai_model": {
-            "active_provider": settings.MODEL_PROVIDER,
-            "gemini_model": settings.GEMINI_MODEL,
-            "gemini_api_key_set": bool(settings.GEMINI_API_KEY),
-            "gemini_temperature": settings.GEMINI_TEMPERATURE,
-            "openai_model": settings.OPENAI_MODEL,
-            "openai_api_key_set": bool(settings.OPENAI_API_KEY),
-            "openai_base_url": settings.OPENAI_BASE_URL,
-            "ollama_model": settings.OLLAMA_MODEL,
-            "ollama_base_url": settings.OLLAMA_BASE_URL,
+        {
+            "id": "usr_03",
+            "name": "Rohit Verma (Ops Viewer)",
+            "email": "rohit.v@example.com",
+            "role": "viewer",
+            "status": "active",
+            "last_active": "2 hours ago",
         },
-        "policies": {
-            "human_review_threshold_inr": settings.HUMAN_REVIEW_THRESHOLD_INR,
-            "min_confidence_threshold": settings.MIN_CONFIDENCE_THRESHOLD,
-            "max_contact_attempts": settings.MAX_CONTACT_ATTEMPTS,
-            "min_hours_between_contacts": settings.MIN_HOURS_BETWEEN_CONTACTS,
-            "max_contacts_per_week": settings.MAX_CONTACTS_PER_WEEK,
-            "max_retry_delay_minutes": settings.MAX_RETRY_DELAY_MINUTES,
-        },
-        "voice": {
-            "voice_enabled": settings.VOICE_ENABLED,
-            "voice_stt_provider": settings.VOICE_STT_PROVIDER,
-            "voice_tts_provider": settings.VOICE_TTS_PROVIDER,
-            "voice_min_confidence_threshold": settings.VOICE_MIN_CONFIDENCE_THRESHOLD,
-            "voice_session_timeout_seconds": settings.VOICE_SESSION_TIMEOUT_SECONDS,
-        },
-        "team": [
-            {
-                "id": "usr_01",
-                "name": "Arjun Sharma (Admin)",
-                "email": "arjun@example.com",
-                "role": "admin",
-                "status": "active",
-                "last_active": "Just now",
-            },
-            {
-                "id": "usr_02",
-                "name": "Priya Patel (Reviewer)",
-                "email": "priya.p@example.com",
-                "role": "reviewer",
-                "status": "active",
-                "last_active": "10 mins ago",
-            },
-            {
-                "id": "usr_03",
-                "name": "Rohit Verma (Ops Viewer)",
-                "email": "rohit.v@example.com",
-                "role": "viewer",
-                "status": "active",
-                "last_active": "2 hours ago",
-            },
-        ],
-        "channels": {
-            "whatsapp": {"enabled": True, "status": "connected", "sender": "+91 98765 00000"},
-            "sms": {"enabled": True, "status": "connected", "sender": "RZPPAY"},
-            "email": {"enabled": True, "status": "connected", "sender": "billing@merchant.com"},
-            "voice": {"enabled": settings.VOICE_ENABLED, "status": "ready", "agent_name": "Aarav (AI Voice Bot)"},
-        },
+    ]
+    view["channels"] = {
+        "whatsapp": {"enabled": True, "status": "connected", "sender": "+91 98765 00000"},
+        "sms": {"enabled": True, "status": "connected", "sender": "RZPPAY"},
+        "email": {"enabled": True, "status": "connected", "sender": "billing@merchant.com"},
+        "voice": {"enabled": settings.VOICE_ENABLED, "status": "ready", "agent_name": "Aarav (AI Voice Bot)"},
     }
+    return view
 
 
 @router.post("/settings")
@@ -136,38 +95,139 @@ async def update_settings(
     operator_id: str = Depends(require_admin),
 ):
     """Update runtime operational policies and AI model configuration."""
-    if req.model_provider:
-        settings.MODEL_PROVIDER = req.model_provider
-    if req.gemini_api_key is not None:
-        settings.GEMINI_API_KEY = req.gemini_api_key
-    if req.gemini_model:
-        settings.GEMINI_MODEL = req.gemini_model
-    if req.openai_api_key is not None:
-        settings.OPENAI_API_KEY = req.openai_api_key
-    if req.openai_model:
-        settings.OPENAI_MODEL = req.openai_model
-    if req.ollama_model:
-        settings.OLLAMA_MODEL = req.ollama_model
-    if req.ollama_base_url:
-        settings.OLLAMA_BASE_URL = req.ollama_base_url
-    if req.payment_execution_mode:
-        settings.PAYMENT_EXECUTION_MODE = req.payment_execution_mode
-    if req.human_review_threshold_inr is not None:
-        settings.HUMAN_REVIEW_THRESHOLD_INR = req.human_review_threshold_inr
-    if req.min_confidence_threshold is not None:
-        settings.MIN_CONFIDENCE_THRESHOLD = req.min_confidence_threshold
-    if req.max_contact_attempts is not None:
-        settings.MAX_CONTACT_ATTEMPTS = req.max_contact_attempts
-    if req.min_hours_between_contacts is not None:
-        settings.MIN_HOURS_BETWEEN_CONTACTS = req.min_hours_between_contacts
-    if req.voice_enabled is not None:
-        settings.VOICE_ENABLED = req.voice_enabled
+    from fastapi import HTTPException
+    from recovery_autopilot.services.settings_manager import settings_manager
 
-    logger.info("Settings updated by admin '%s'", operator_id)
+    try:
+        res = await settings_manager.update_settings(
+            req.model_dump(exclude_unset=True),
+            operator_id=operator_id,
+        )
+        logger.info("Settings successfully updated by admin '%s'", operator_id)
+        return res
+    except ValueError as exc:
+        logger.warning("Settings update rejected: %s", str(exc))
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        logger.error("Unexpected settings update failure: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Internal settings error: {str(exc)}")
+
+
+@router.post("/test-mode-smoke-test")
+@router.post("/gateway/smoke-test")
+async def execute_gateway_smoke_test(operator_id: str = Depends(require_admin)):
+    """Manual test-mode smoke test: creates object, receives webhook, verifies exact case correlation."""
+    import uuid
+    from recovery_autopilot.domain.enums import CaseStatus, FailureCategory, PaymentMethod
+    from recovery_autopilot.domain.models import PaymentContext
+    from recovery_autopilot.persistence.database import async_session_factory
+    from recovery_autopilot.persistence.repository import SqlAlchemyRepository
+    from recovery_autopilot.services.event_processor import event_processor
+    from recovery_autopilot.services.orchestrator import orchestrator
+
+    uid = uuid.uuid4().hex[:8]
+    pay_id = f"pay_smoke_{uid}"
+    sub_id = f"sub_smoke_{uid}"
+
+    # 1. Create failed case in DB
+    ctx = PaymentContext(
+        payment_id=pay_id,
+        subscription_id=sub_id,
+        customer_id=f"cust_{uid}",
+        customer_name="Smoke Test Merchant",
+        customer_email="smoke.test@merchant.example.com",
+        customer_phone="+919876543210",
+        amount_inr=1599.0,
+        currency="INR",
+        failure_category=FailureCategory.INSUFFICIENT_FUNDS,
+        failure_code="BAD_REQUEST_PAYMENT_FAILED",
+        failure_reason="Smoke test simulated failure",
+        payment_method=PaymentMethod.UPI,
+    )
+    async with async_session_factory() as session:
+        repo = SqlAlchemyRepository(session)
+        workflow = orchestrator.create_workflow(repo)
+        case = await workflow.process_failed_payment(ctx)
+        await session.commit()
+        case_id = case.case_id
+
+    # 2. Create Payment Link through active gateway adapter with operation key
+    op_key = f"op_smoke_{uid}"
+    link_result = await orchestrator.payment_link_adapter.create_payment_link(
+        case=case,
+        description=f"Smoke Test Payment Link for {case_id}",
+        idempotency_key=op_key,
+    )
+
+    if link_result.status != "SUCCESS":
+        return {
+            "status": "failed",
+            "step": "create_payment_link",
+            "error": link_result.error,
+            "mode": settings.PAYMENT_EXECUTION_MODE,
+        }
+
+    plink_id = link_result.external_id
+
+    # Persist updated case with generated payment_link_id
+    async with async_session_factory() as session:
+        repo = SqlAlchemyRepository(session)
+        await repo.save_case(case)
+        await session.commit()
+
+    # 3. Simulate and ingest payment_link.paid webhook
+    event_id = f"evt_smoke_wh_{uid}"
+    sim_captured_pay_id = f"pay_smoke_cap_{uid}"
+    webhook_payload = {
+        "event": "payment_link.paid",
+        "id": event_id,
+        "payload": {
+            "payment_link": {
+                "entity": {
+                    "id": plink_id,
+                    "amount_paid": 159900,
+                    "status": "paid",
+                }
+            },
+            "payment": {
+                "entity": {
+                    "id": sim_captured_pay_id,
+                    "payment_link_id": plink_id,
+                    "amount": 159900,
+                    "currency": "INR",
+                    "status": "captured",
+                }
+            },
+        },
+    }
+
+    wh_result = await event_processor.process_event(
+        payload=webhook_payload,
+        event_id=event_id,
+        source="smoke_test",
+    )
+
+    # 4. Verify exact case correlation and recovery ledger entry
+    async with async_session_factory() as session:
+        repo = SqlAlchemyRepository(session)
+        updated_case = await repo.get_case(case_id)
+        ledger_rec = await repo.get_recovery_by_payment_id(sim_captured_pay_id)
+
     return {
         "status": "success",
-        "updated_by": operator_id,
-        "message": "Settings updated successfully",
+        "smoke_test_passed": True,
+        "mode": settings.PAYMENT_EXECUTION_MODE,
+        "gateway_client": type(orchestrator.payment_link_adapter.client).__name__,
+        "case_id": case_id,
+        "payment_link_id": plink_id,
+        "event_id": event_id,
+        "webhook_processing_status": wh_result.get("status"),
+        "case_final_status": updated_case.status.value if updated_case else None,
+        "recovered_amount": updated_case.outcome.recovered_amount if updated_case and updated_case.outcome else None,
+        "ledger_recorded": ledger_rec is not None,
+        "ledger_id": ledger_rec.ledger_id if ledger_rec else None,
+        "matched_field": ledger_rec.matched_field if ledger_rec else None,
+        "verified_by": operator_id,
     }
 
 

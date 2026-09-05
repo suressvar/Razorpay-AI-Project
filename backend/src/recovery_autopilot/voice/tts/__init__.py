@@ -13,11 +13,26 @@ from recovery_autopilot.voice.tts.local_tts_provider import (
     LocalMultilingualTTSProvider,
     VOICE_REGISTRY,
 )
+from recovery_autopilot.voice.tts.neural_tts_provider import (
+    NEURAL_VOICE_REGISTRY,
+    NeuralMultilingualTTSProvider,
+)
 from recovery_autopilot.voice.tts.tts_normalization import (
     LocaleSpeechRenderer,
     number_to_indian_english_words,
     number_to_hindi_words,
 )
+
+
+def get_tts_provider(prefer_neural: bool = True) -> BaseTTSProvider:
+    """Returns neural TTS provider if available, otherwise local acoustic provider."""
+    if prefer_neural:
+        try:
+            return NeuralMultilingualTTSProvider()
+        except Exception:
+            pass
+    return LocalMultilingualTTSProvider()
+
 from recovery_autopilot.voice.tts.lexicon import (
     FINTECH_TERMINOLOGY,
     INDIAN_BANKS,
@@ -39,7 +54,11 @@ __all__ = [
     "VoiceProfile",
     "LocalMultilingualTTSProvider",
     "VOICE_REGISTRY",
+    "NeuralMultilingualTTSProvider",
+    "NEURAL_VOICE_REGISTRY",
+    "get_tts_provider",
     "LocaleSpeechRenderer",
+
     "number_to_indian_english_words",
     "number_to_hindi_words",
     "FINTECH_TERMINOLOGY",

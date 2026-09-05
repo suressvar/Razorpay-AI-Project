@@ -31,6 +31,7 @@ class WebhookEventRecord(Base):
     last_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     locked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     lease_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    worker_lease_token: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     processed: Mapped[bool] = mapped_column(Boolean, default=False)
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     processed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -153,3 +154,36 @@ class AuditEventRecord(Base):
     event_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     details_json: Mapped[str] = mapped_column(Text, default="{}")
     timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+
+
+class RecoveryLedgerRecord(Base):
+    """Persisted recovery ledger recording exact attributed recoveries with unique provider payment references."""
+
+    __tablename__ = "recovery_ledger"
+
+    ledger_id: Mapped[str] = mapped_column(String(64), primary_key=True, index=True)
+    case_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    provider_payment_id: Mapped[str] = mapped_column(String(128), unique=True, index=True, nullable=False)
+    event_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    amount_inr: Mapped[float] = mapped_column(Float, nullable=False)
+    currency: Mapped[str] = mapped_column(String(8), default="INR")
+    matched_field: Mapped[str] = mapped_column(String(64), nullable=False)
+    matched_value: Mapped[str] = mapped_column(String(128), nullable=False)
+    recovered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class OperationKeyRecord(Base):
+    """Persisted operation keys preventing duplicate external provider operations and reconciling timeouts."""
+
+    __tablename__ = "operation_keys"
+
+    operation_key: Mapped[str] = mapped_column(String(128), primary_key=True, index=True)
+    case_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    action_type: Mapped[str] = mapped_column(String(64), default="create_payment_link")
+    status: Mapped[str] = mapped_column(String(32), default="pending", index=True)  # pending, completed, failed
+    external_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True, index=True)
+    result_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)

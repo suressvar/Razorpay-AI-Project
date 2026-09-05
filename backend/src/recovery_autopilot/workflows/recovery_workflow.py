@@ -162,7 +162,8 @@ class RecoveryWorkflow:
         audit_in_prog = CaseStateMachine.transition(case, CaseStatus.ACTION_IN_PROGRESS, actor=ActorType.EXECUTOR)
         await self._record_audit(audit_in_prog)
 
-        result = await self.executor.execute_action(case, action, customer_message=msg)
+        sess = getattr(self.repository, "session", None)
+        result = await self.executor.execute_action(case, action, customer_message=msg, session=sess)
         case.latest_action_result = result
 
         if action in [RecoveryAction.SEND_PAYMENT_LINK, RecoveryAction.REQUEST_METHOD_UPDATE, RecoveryAction.SEND_REMINDER]:
@@ -183,31 +184,67 @@ class RecoveryWorkflow:
 
         return result
 
-    async def handle_human_approval(self, case: PaymentCase, operator_id: str) -> None:
+    async def handle_human_approval(
+        self,
+        case: PaymentCase,
+        operator_id: str,
+        notes: Optional[str] = None,
+        action_version: Optional[int] = None,
+    ) -> None:
         """Human operator signs off on a pending high-value or low-confidence proposal."""
         if case.status != CaseStatus.AWAITING_APPROVAL:
             raise ValueError(f"Case {case.case_id} is in status {case.status.value}, not AWAITING_APPROVAL")
+
+        current_ver = getattr(case, "action_version", 1)
+        if action_version is not None and action_version != current_ver:
+            raise ValueError(
+                f"Stale approval rejected: submitted action_version {action_version} != current case action_version {current_ver}."
+            )
 
         audit_apprv = AuditEvent(
             case_id=case.case_id,
             actor=ActorType.HUMAN,
             event_type="HUMAN_APPROVAL_GRANTED",
-            details={"operator_id": operator_id},
+            details={
+                "operator_id": operator_id,
+                "notes": notes or "Approval granted",
+                "action_version": current_ver,
+                "outcome": "APPROVED",
+                "timestamp": utc_now().isoformat(),
+            },
         )
         await self._record_audit(audit_apprv)
 
         await self.execute_approved_action(case)
 
-    async def handle_human_rejection(self, case: PaymentCase, operator_id: str, reason: str) -> None:
+    async def handle_human_rejection(
+        self,
+        case: PaymentCase,
+        operator_id: str,
+        reason: str,
+        action_version: Optional[int] = None,
+    ) -> None:
         """Human operator rejects proposed recovery action."""
         if case.status != CaseStatus.AWAITING_APPROVAL:
             raise ValueError(f"Case {case.case_id} is in status {case.status.value}, not AWAITING_APPROVAL")
+
+        current_ver = getattr(case, "action_version", 1)
+        if action_version is not None and action_version != current_ver:
+            raise ValueError(
+                f"Stale rejection rejected: submitted action_version {action_version} != current case action_version {current_ver}."
+            )
 
         audit_rej = AuditEvent(
             case_id=case.case_id,
             actor=ActorType.HUMAN,
             event_type="HUMAN_APPROVAL_REJECTED",
-            details={"operator_id": operator_id, "reason": reason},
+            details={
+                "operator_id": operator_id,
+                "reason": reason,
+                "action_version": current_ver,
+                "outcome": "REJECTED",
+                "timestamp": utc_now().isoformat(),
+            },
         )
         await self._record_audit(audit_rej)
 
@@ -319,6 +356,13 @@ class RecoveryWorkflow:
         )
         await self._record_audit(audit_trans)
         await self._save_case(case)
+
+        # Cancel pending recovery work (promises to pay, voice sessions, reminders)
+        if hasattr(self.repository, "cancel_pending_recovery_work"):
+            try:
+                await self.repository.cancel_pending_recovery_work(case.case_id)
+            except Exception as exc:
+                logger.warning("Failed cancelling pending recovery work for case %s: %s", case.case_id, exc)
 
         return outcome
 

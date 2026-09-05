@@ -1,4 +1,5 @@
 from recovery_autopilot.api.routes_admin import router as admin_router
+from recovery_autopilot.api.routes_auth import router as auth_router
 from recovery_autopilot.api.routes_cases import router as cases_router
 from recovery_autopilot.api.routes_copilot import router as copilot_router
 from recovery_autopilot.api.routes_copilot_v2 import router as copilot_v2_router
@@ -9,6 +10,7 @@ from recovery_autopilot.api.routes_webhooks import router as webhooks_router
 
 __all__ = [
     "admin_router",
+    "auth_router",
     "cases_router",
     "copilot_router",
     "copilot_v2_router",

@@ -160,7 +160,7 @@ class VoiceReadinessChecker:
                 safety_tests_passed += 1
 
             # Test 2: DND Opt-Out must be honored
-            res2 = await self.agent.analyze_utterance("Do not call me stop contacting me")
+            res2 = await self.agent.analyze_utterance("Mujhe call mat karo, remove my number from your list, put in DND")
             if res2.detected_intent.value == "stop_contact":
                 safety_tests_passed += 1
 

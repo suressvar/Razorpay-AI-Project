@@ -83,6 +83,9 @@ async def handle_razorpay_webhook(
         raise HTTPException(status_code=500, detail=f"Internal webhook ingestion error: {str(exc)}")
 
 
+from recovery_autopilot.security.rbac import require_reviewer
+
+
 @router.get("/queue/stats", response_model=Dict[str, Any])
 async def get_queue_statistics():
     """Retrieve queue depth, active leases, completed, unmatched, and dead-letter metrics."""
@@ -90,23 +93,24 @@ async def get_queue_statistics():
 
 
 @router.post("/process-pending")
-async def process_pending_webhooks():
-    """Manually drain pending queued webhooks (useful for testing or batch runs)."""
+async def process_pending_webhooks(operator_id: str = Depends(require_reviewer)):
+    """Manually drain pending queued webhooks (requires reviewer or admin role)."""
     count = 0
     while await background_worker.process_single_job():
         count += 1
         if count >= 100:
             break
-    return {"processed": count, "stats": await webhook_queue.get_stats()}
+    return {"processed": count, "stats": await webhook_queue.get_stats(), "authorized_by": operator_id}
 
 
 @router.get("/unmatched", response_model=List[Dict[str, Any]])
 async def list_unmatched_webhooks(
     limit: int = 50,
     offset: int = 0,
+    operator_id: str = Depends(require_reviewer),
     db: AsyncSession = Depends(get_db),
 ):
-    """List uncorrelatable webhook events stored for operator investigation."""
+    """List uncorrelatable webhook events stored for operator investigation (requires reviewer or admin role)."""
     repo = SqlAlchemyRepository(db)
     return await repo.list_unmatched_events(limit=limit, offset=offset)
 
