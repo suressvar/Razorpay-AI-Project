@@ -11,7 +11,15 @@ import {
 
 const API_BASE = '';
 
-let currentAuthToken = localStorage.getItem('recovery_auth_token') || '';
+export const DEFAULT_DEMO_TOKEN = 'auth_token_admin_recovery_v1';
+export const DEFAULT_DEMO_PROFILE: OperatorProfile = {
+  operator_id: 'usr_admin_01',
+  username: 'admin',
+  name: 'Arjun Sharma (Admin)',
+  role: 'admin',
+};
+
+let currentAuthToken = localStorage.getItem('recovery_auth_token') || DEFAULT_DEMO_TOKEN;
 
 export interface OperatorProfile {
   operator_id: string;
@@ -39,12 +47,12 @@ export function clearAuthToken() {
   localStorage.removeItem('recovery_operator_profile');
 }
 
-export function getStoredOperatorProfile(): OperatorProfile | null {
+export function getStoredOperatorProfile(): OperatorProfile {
   try {
     const raw = localStorage.getItem('recovery_operator_profile');
-    return raw ? JSON.parse(raw) : null;
+    return raw ? JSON.parse(raw) : DEFAULT_DEMO_PROFILE;
   } catch {
-    return null;
+    return DEFAULT_DEMO_PROFILE;
   }
 }
 

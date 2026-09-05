@@ -73,7 +73,7 @@ export default function App() {
     {
       key: 'copilot',
       icon: <RobotOutlined style={{ fontSize: 16 }} />,
-      label: 'AI Copilot',
+      label: 'Ray AI Copilot',
       onClick: () => navigate('/copilot'),
     },
     {

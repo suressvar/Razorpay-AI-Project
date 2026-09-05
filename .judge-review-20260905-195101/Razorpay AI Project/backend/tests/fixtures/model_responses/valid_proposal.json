@@ -1,9 +1,0 @@
-{
-  "action": "SEND_PAYMENT_LINK",
-  "confidence": 0.86,
-  "delay_minutes": 120,
-  "reason_codes": ["INSUFFICIENT_FUNDS_SALARY_CYCLE"],
-  "explanation": "Customer account lacked balance. Direct payment link offers smooth collection experience.",
-  "customer_message": "Hi, your subscription payment could not be processed. Tap here to complete payment.",
-  "requires_human_approval": false
-}

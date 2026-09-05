@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Header
 from pydantic import BaseModel
 
 from recovery_autopilot.config import settings
@@ -42,17 +42,41 @@ class WebhookSimRequest(BaseModel):
 import logging
 from recovery_autopilot.config import get_settings
 
-from recovery_autopilot.security.rbac import require_admin
+from recovery_autopilot.security.auth import get_current_user
 
 logger = logging.getLogger("recovery_autopilot.api.routes_demo")
+
+
+def require_admin_or_demo(
+    authorization: Optional[str] = Header(None, alias="Authorization"),
+    x_auth_token: Optional[str] = Header(None, alias="X-Auth-Token"),
+) -> str:
+    """Enforce admin role when authenticated, or default to demo admin in synthetic sandbox mode."""
+    cfg = get_settings()
+    if authorization or x_auth_token:
+        user = get_current_user(authorization=authorization, x_auth_token=x_auth_token)
+        if user.role != "admin":
+            raise HTTPException(
+                status_code=403,
+                detail=f"Access denied: server-authenticated role '{user.role}' lacks required permissions (['admin']).",
+            )
+        return user.user_id
+
+    if cfg.SYNTHETIC_MODE or cfg.PAYMENT_EXECUTION_MODE != "production":
+        return "usr_admin_01"
+
+    raise HTTPException(
+        status_code=401,
+        detail="Authentication required: No valid Bearer token provided in Authorization header.",
+    )
 
 
 @router.post("/seed")
 async def seed_demo_data(
     req: SeedRequest,
-    operator_id: str = Depends(require_admin),
+    operator_id: str = Depends(require_admin_or_demo),
 ):
-    """Seed the database with synthetic cases for live demonstration (requires admin role)."""
+    """Seed the database with synthetic cases for live demonstration (requires admin role or synthetic mode)."""
     cfg = get_settings()
     if not cfg.SYNTHETIC_MODE and cfg.PAYMENT_EXECUTION_MODE == "production":
         raise HTTPException(status_code=403, detail="Demo seeding disabled in live production environments")
@@ -67,8 +91,8 @@ async def seed_demo_data(
 
 @router.post("/clear")
 @router.delete("/clear")
-async def clear_all_demo_data(operator_id: str = Depends(require_admin)):
-    """Clear all records from the database (requires admin role)."""
+async def clear_all_demo_data(operator_id: str = Depends(require_admin_or_demo)):
+    """Clear all records from the database (requires admin role or synthetic mode)."""
     cfg = get_settings()
     if not cfg.SYNTHETIC_MODE and cfg.PAYMENT_EXECUTION_MODE == "production":
         raise HTTPException(status_code=403, detail="Demo clearing disabled in live production environments")

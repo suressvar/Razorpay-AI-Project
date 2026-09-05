@@ -369,7 +369,7 @@ export default function Copilot() {
             <RobotFilled />
           </div>
           <div className="flex items-center gap-2">
-            <h2 className="text-base font-bold text-slate-800 m-0">AI Copilot</h2>
+            <h2 className="text-base font-bold text-slate-800 m-0">Ray AI Copilot</h2>
             <Badge status="processing" text={<span className="text-xs text-emerald-600 font-medium">Ready</span>} />
           </div>
         </div>
@@ -394,7 +394,7 @@ export default function Copilot() {
               <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center text-2xl shadow-md mb-3">
                 <ThunderboltFilled />
               </div>
-              <h3 className="text-lg font-bold text-slate-800 m-0">AI Copilot</h3>
+              <h3 className="text-lg font-bold text-slate-800 m-0">Ray AI Copilot</h3>
 
               {/* Quick Action Chips */}
               <div className="mt-5 w-full max-w-2xl">
@@ -560,7 +560,7 @@ export default function Copilot() {
                           </div>
 
                           <div className="px-3 py-2 bg-white rounded-lg border border-blue-200 text-xs text-slate-800 flex items-start gap-2 shadow-xs">
-                            <span className="font-bold text-blue-600">Copilot Advice:</span>
+                            <span className="font-bold text-blue-600">Ray AI Advice:</span>
                             <span className="text-slate-700">
                               {msg.investigation?.recommended_solution?.recommendation || msg.diagnosis?.recommendation}
                             </span>

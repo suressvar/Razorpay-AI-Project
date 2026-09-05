@@ -213,7 +213,7 @@ export default function CustomerIssues() {
             icon={<RobotOutlined />}
             onClick={() => navigate(`/copilot?query=Investigate issue ${record.issue_id} for ${record.customer_email || ''}&case_id=${record.case_id || ''}`)}
           >
-            Copilot
+            Ray AI
           </Button>
         </Space>
       ),
@@ -238,7 +238,7 @@ export default function CustomerIssues() {
             icon={<RobotOutlined />}
             onClick={() => navigate('/copilot')}
           >
-            Open AI Copilot
+            Open Ray AI Copilot
           </Button>
           <Button
             type="primary"

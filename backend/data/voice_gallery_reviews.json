@@ -188,6 +188,60 @@
       "naturalness_rating": 5,
       "comments": "Excellent Marathi pronunciation of subscription terms.",
       "timestamp": "2026-09-05T14:41:28.672233+00:00"
+    },
+    {
+      "item_id": "gallery_te_01",
+      "evaluator_name": "Venkatesh Babu (Telugu Evaluator)",
+      "native_speaker": true,
+      "intelligibility_rating": 5,
+      "naturalness_rating": 4,
+      "comments": "Very natural tone for Telugu debt collection call.",
+      "timestamp": "2026-09-05T15:06:28.878711+00:00"
+    },
+    {
+      "item_id": "gallery_mr_01",
+      "evaluator_name": "Pooja Patil (Marathi Evaluator)",
+      "native_speaker": true,
+      "intelligibility_rating": 5,
+      "naturalness_rating": 5,
+      "comments": "Excellent Marathi pronunciation of subscription terms.",
+      "timestamp": "2026-09-05T15:06:28.981203+00:00"
+    },
+    {
+      "item_id": "gallery_te_01",
+      "evaluator_name": "Venkatesh Babu (Telugu Evaluator)",
+      "native_speaker": true,
+      "intelligibility_rating": 5,
+      "naturalness_rating": 4,
+      "comments": "Very natural tone for Telugu debt collection call.",
+      "timestamp": "2026-09-05T15:22:44.170644+00:00"
+    },
+    {
+      "item_id": "gallery_mr_01",
+      "evaluator_name": "Pooja Patil (Marathi Evaluator)",
+      "native_speaker": true,
+      "intelligibility_rating": 5,
+      "naturalness_rating": 5,
+      "comments": "Excellent Marathi pronunciation of subscription terms.",
+      "timestamp": "2026-09-05T15:22:44.184419+00:00"
+    },
+    {
+      "item_id": "gallery_te_01",
+      "evaluator_name": "Venkatesh Babu (Telugu Evaluator)",
+      "native_speaker": true,
+      "intelligibility_rating": 5,
+      "naturalness_rating": 4,
+      "comments": "Very natural tone for Telugu debt collection call.",
+      "timestamp": "2026-09-05T15:37:12.442365+00:00"
+    },
+    {
+      "item_id": "gallery_mr_01",
+      "evaluator_name": "Pooja Patil (Marathi Evaluator)",
+      "native_speaker": true,
+      "intelligibility_rating": 5,
+      "naturalness_rating": 5,
+      "comments": "Excellent Marathi pronunciation of subscription terms.",
+      "timestamp": "2026-09-05T15:37:12.453506+00:00"
     }
   ]
 }

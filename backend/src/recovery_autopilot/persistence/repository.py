@@ -26,6 +26,7 @@ from recovery_autopilot.domain.models import (
 )
 from recovery_autopilot.persistence.models import (
     AuditEventRecord,
+    OperationKeyRecord,
     PaymentCaseRecord,
     PromiseToPayRecord,
     RecoveryActionRecord,
@@ -597,6 +598,7 @@ class SqlAlchemyRepository(CaseRepositoryProtocol):
             (CustomerIssueRecord, "customer_issues"),
             (EmailDraftRecord, "email_drafts"),
             (PaymentCaseRecord, "payment_cases"),
+            (OperationKeyRecord, "operation_keys"),
         ]:
             res = await self.session.execute(delete(model))
             counts[name] = res.rowcount or 0

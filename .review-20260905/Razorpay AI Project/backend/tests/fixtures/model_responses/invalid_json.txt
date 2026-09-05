@@ -1,5 +1,0 @@
-Here is your proposal:
-{
-  "action": "SEND_PAYMENT_LINK",
-  "confidence": 0.85,
-  invalid_unclosed_json:

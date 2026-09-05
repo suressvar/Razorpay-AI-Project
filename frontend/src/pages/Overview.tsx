@@ -483,7 +483,7 @@ export default function Overview() {
               >
                 <div>
                   <h4 className="font-semibold text-slate-900 m-0 group-hover:text-cyan-600 transition-colors">
-                    AI Copilot
+                    Ray AI Copilot
                   </h4>
                 </div>
                 <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 group-hover:bg-cyan-50 group-hover:text-cyan-600 transition-colors">

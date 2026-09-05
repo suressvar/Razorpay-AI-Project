@@ -57,6 +57,18 @@ async def init_db() -> None:
             "ALTER TABLE webhook_events ADD COLUMN locked_at TIMESTAMP",
             "ALTER TABLE webhook_events ADD COLUMN lease_expires_at TIMESTAMP",
             "ALTER TABLE webhook_events ADD COLUMN worker_lease_token VARCHAR(64)",
+            # customer_issues schema migrations
+            "ALTER TABLE customer_issues ADD COLUMN case_id VARCHAR(64)",
+            "ALTER TABLE customer_issues ADD COLUMN next_action VARCHAR(256)",
+            "ALTER TABLE customer_issues ADD COLUMN reported_symptoms TEXT",
+            "ALTER TABLE customer_issues ADD COLUMN expected_behavior TEXT",
+            "ALTER TABLE customer_issues ADD COLUMN actual_behavior TEXT",
+            "ALTER TABLE customer_issues ADD COLUMN actions_json TEXT DEFAULT '[]'",
+            "ALTER TABLE customer_issues ADD COLUMN communications_json TEXT DEFAULT '[]'",
+            "ALTER TABLE customer_issues ADD COLUMN timeline_json TEXT DEFAULT '[]'",
+            "ALTER TABLE customer_issues ADD COLUMN resolution_summary TEXT",
+            "ALTER TABLE customer_issues ADD COLUMN resolution_verified BOOLEAN DEFAULT 0",
+            "ALTER TABLE customer_issues ADD COLUMN resolution_evidence TEXT",
         ]
         for stmt in migration_statements:
             try:

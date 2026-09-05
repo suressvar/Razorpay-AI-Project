@@ -190,7 +190,7 @@ export default function IssueDetail() {
               navigate(`/copilot?query=Investigate issue ${issue.issue_id}: ${issue.title}&case_id=${issue.case_id || ''}&customer_email=${issue.customer_email || ''}`)
             }
           >
-            Investigate with Copilot
+            Investigate with Ray AI
           </Button>
 
           <Button

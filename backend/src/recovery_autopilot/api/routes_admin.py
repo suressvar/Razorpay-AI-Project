@@ -84,7 +84,7 @@ async def get_all_settings():
         "whatsapp": {"enabled": True, "status": "connected", "sender": "+91 98765 00000"},
         "sms": {"enabled": True, "status": "connected", "sender": "RZPPAY"},
         "email": {"enabled": True, "status": "connected", "sender": "billing@merchant.com"},
-        "voice": {"enabled": settings.VOICE_ENABLED, "status": "ready", "agent_name": "Aarav (AI Voice Bot)"},
+        "voice": {"enabled": settings.VOICE_ENABLED, "status": "ready", "agent_name": "Ray AI (Voice Agent)"},
     }
     return view
 

@@ -54,7 +54,7 @@ def transcription_prompt(language_hint: str = "english") -> str:
 
 VOICE_AGENT_MASTER_PROMPT = """
 # Role and outcome
-You are Aarav, a calm multilingual payment-recovery voice assistant for a merchant
+You are Ray AI, a calm multilingual payment-recovery voice assistant for a merchant
 whose payments are powered by Razorpay. Help the customer understand a failed
 subscription renewal and choose one safe next step. Success means correct
 understanding, clear consent, and a verified next action—not pressure to pay.
@@ -127,7 +127,7 @@ no credential is requested or repeated, no unconfirmed action is called complete
 
 
 VOICE_TTS_MASTER_PROMPT = """
-Speak as Aarav, a calm and capable Indian customer-support professional.
+Speak as Ray AI, a calm and capable Indian customer-support professional.
 
 - Use the response language natively and consistently: English, Hindi, Bengali, Tamil, Telugu, Marathi, or Kannada.
 - Use a warm neutral Indian delivery without caricaturing an accent.
@@ -154,14 +154,14 @@ After two unclear attempts, offer a human specialist.
 # Technical payment words intentionally remain familiar instead of becoming formal translations.
 LOCALIZED_RESPONSES: Dict[str, Dict[str, str]] = {
     "consent": {
-        "english": "Hello, I am Aarav from Razorpay Recovery Autopilot. Your subscription payment of {amount} rupees could not be completed. May I take one minute to help resolve it?",
-        "hindi": "नमस्ते, मैं Razorpay Recovery Autopilot से आरव बोल रहा हूँ। आपका {amount} रुपये का subscription payment पूरा नहीं हो पाया। क्या इसे हल करने के लिए मैं आपका एक मिनट ले सकता हूँ?",
-        "bengali": "নমস্কার, আমি Razorpay Recovery Autopilot থেকে আরভ বলছি। আপনার {amount} টাকার subscription payment সম্পূর্ণ হয়নি। এটি সমাধান করতে আমি কি এক মিনিট সময় নিতে পারি?",
-        "tamil": "வணக்கம், நான் Razorpay Recovery Autopilot-லிருந்து ஆரவ் பேசுகிறேன். உங்கள் {amount} ரூபாய் subscription payment நிறைவடையவில்லை. இதை சரிசெய்ய ஒரு நிமிடம் பேசலாமா?",
-        "telugu": "నమస్కారం, నేను Razorpay Recovery Autopilot నుంచి ఆరవ్ మాట్లాడుతున్నాను. మీ {amount} రూపాయల subscription payment పూర్తి కాలేదు. దీన్ని పరిష్కరించడానికి ఒక నిమిషం మాట్లాడవచ్చా?",
-        "marathi": "नमस्कार, मी Razorpay Recovery Autopilot मधून आरव बोलत आहे. तुमचे {amount} रुपयांचे subscription payment पूर्ण झाले नाही. ते सोडवण्यासाठी मी तुमचा एक मिनिट वेळ घेऊ का?",
-        "kannada": "ನಮಸ್ಕಾರ, ನಾನು Razorpay Recovery Autopilot ನಿಂದ ಆರವ್ ಮಾತನಾಡುತ್ತಿದ್ದೇನೆ. ನಿಮ್ಮ {amount} ರೂಪಾಯಿಯ subscription payment ಪೂರ್ಣವಾಗಿಲ್ಲ. ಇದನ್ನು ಪರಿಹರಿಸಲು ಒಂದು ನಿಮಿಷ ಮಾತನಾಡಬಹುದೇ?",
-        "hinglish": "Namaste, main Razorpay Recovery Autopilot se Aarav bol raha hoon. Aapka {amount} rupees ka subscription payment complete nahi hua. Kya ise resolve karne ke liye main ek minute baat kar sakta hoon?",
+        "english": "Hello, I am Ray AI from Razorpay Recovery Autopilot. Your subscription payment of {amount} rupees could not be completed. May I take one minute to help resolve it?",
+        "hindi": "नमस्ते, मैं Razorpay Recovery Autopilot से Ray AI बोल रहा हूँ। आपका {amount} रुपये का subscription payment पूरा नहीं हो पाया। क्या इसे हल करने के लिए मैं आपका एक मिनट ले सकता हूँ?",
+        "bengali": "নমস্কার, আমি Razorpay Recovery Autopilot থেকে Ray AI বলছি। আপনার {amount} টাকার subscription payment সম্পূর্ণ হয়নি। এটি সমাধান করতে আমি কি এক মিনিট সময় নিতে পারি?",
+        "tamil": "வணக்கம், நான் Razorpay Recovery Autopilot-லிருந்து Ray AI பேசுகிறேன். உங்கள் {amount} ரூபாய் subscription payment நிறைவடையவில்லை. இதை சரிசெய்ய ஒரு நிமிடம் பேசலாமா?",
+        "telugu": "నమస్కారం, నేను Razorpay Recovery Autopilot నుంచి Ray AI మాట్లాడుతున్నాను. మీ {amount} రూపాయల subscription payment పూర్తి కాలేదు. దీన్ని పరిష్కరించడానికి ఒక నిమిషం మాట్లాడవచ్చా?",
+        "marathi": "नमस्कार, मी Razorpay Recovery Autopilot मधून Ray AI बोलत आहे. तुमचे {amount} रुपयांचे subscription payment पूर्ण झाले नाही. ते सोडवण्यासाठी मी तुमचा एक मिनिट वेळ घेऊ का?",
+        "kannada": "ನಮಸ್ಕಾರ, ನಾನು Razorpay Recovery Autopilot ನಿಂದ Ray AI ಮಾತನಾಡುತ್ತಿದ್ದೇನೆ. ನಿಮ್ಮ {amount} ರೂಪಾಯಿಯ subscription payment ಪೂರ್ಣವಾಗಿಲ್ಲ. ಇದನ್ನು ಪರಿಹರಿಸಲು ಒಂದು ನಿಮಿಷ ಮಾತನಾಡಬಹುದೇ?",
+        "hinglish": "Namaste, main Razorpay Recovery Autopilot se Ray AI bol raha hoon. Aapka {amount} rupees ka subscription payment complete nahi hua. Kya ise resolve karne ke liye main ek minute baat kar sakta hoon?",
     },
     "consent_granted": {
         "english": "Thank you. I can send a payment link on WhatsApp now, or note when you would prefer to pay.",

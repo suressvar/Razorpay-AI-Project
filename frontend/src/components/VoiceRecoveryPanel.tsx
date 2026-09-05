@@ -217,6 +217,8 @@ export const VoiceRecoveryPanel: React.FC<VoiceRecoveryPanelProps> = ({
   const recorderRef = useRef<PcmAudioRecorder | null>(null);
   const browserRecognitionRef = useRef<any>(null);
   const voicesRef = useRef<SpeechSynthesisVoice[]>([]);
+  const synthUnlockedRef = useRef<boolean>(false);
+  const keepAliveTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Auto-scroll transcript
   useEffect(() => {
@@ -237,17 +239,27 @@ export const VoiceRecoveryPanel: React.FC<VoiceRecoveryPanelProps> = ({
     };
     refreshVoices();
     window.speechSynthesis.addEventListener('voiceschanged', refreshVoices);
-    return () => window.speechSynthesis.removeEventListener('voiceschanged', refreshVoices);
+    return () => {
+      window.speechSynthesis.removeEventListener('voiceschanged', refreshVoices);
+    };
   }, []);
 
   useEffect(() => () => {
     browserRecognitionRef.current?.abort?.();
     recorderRef.current?.stop?.().catch?.(() => undefined);
+    if (keepAliveTimerRef.current) {
+      clearInterval(keepAliveTimerRef.current);
+      keepAliveTimerRef.current = null;
+    }
   }, []);
 
   const stopAudio = () => {
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
+    }
+    if (keepAliveTimerRef.current) {
+      clearInterval(keepAliveTimerRef.current);
+      keepAliveTimerRef.current = null;
     }
     setIsSpeaking(false);
     setIsPlayingFullCall(false);
@@ -264,35 +276,74 @@ export const VoiceRecoveryPanel: React.FC<VoiceRecoveryPanelProps> = ({
 
   const speakText = (text: string, lang: VoiceLanguage = 'english') => {
     if (!('speechSynthesis' in window)) return;
-    window.speechSynthesis.cancel();
 
-    const profile = languageProfile(lang);
-    const spokenText = prepareTextForSpeech(text, lang);
-    const utterance = new SpeechSynthesisUtterance(spokenText);
-    utterance.rate = slowerSpeech ? 0.78 : 0.94;
-    utterance.pitch = 1.0;
+    // Clear any previous keepalive timer
+    if (keepAliveTimerRef.current) {
+      clearInterval(keepAliveTimerRef.current);
+      keepAliveTimerRef.current = null;
+    }
 
-    const voices = voicesRef.current.length ? voicesRef.current : window.speechSynthesis.getVoices();
-    const langPrefix = profile.locale.split('-')[0].toLowerCase();
+    const doSpeak = () => {
+      const profile = languageProfile(lang);
+      const spokenText = prepareTextForSpeech(text, lang);
+      const utterance = new SpeechSynthesisUtterance(spokenText);
+      utterance.rate = slowerSpeech ? 0.78 : 0.94;
+      utterance.pitch = 1.0;
+      utterance.volume = 1.0;
 
-    // Strict locale matching: avoid using English or Hindi voice for non-matching Indian languages
-    const matchingVoice = voices.find(
-      (v) =>
-        v.lang.toLowerCase() === profile.locale.toLowerCase() ||
-        v.lang.replace('_', '-').toLowerCase().startsWith(langPrefix)
-    ) || voices.find(
-      (v) =>
-        (lang === 'english' || lang === 'hinglish') &&
-        (v.name.toLowerCase().includes('india') || v.lang.toLowerCase().includes('en-in'))
-    );
+      let voices = voicesRef.current.length ? voicesRef.current : window.speechSynthesis.getVoices();
+      if (voices.length === 0) {
+        // Voices not loaded yet — retry after a short wait
+        setTimeout(() => {
+          voicesRef.current = window.speechSynthesis.getVoices();
+          speakText(text, lang);
+        }, 300);
+        return;
+      }
+      const langPrefix = profile.locale.split('-')[0].toLowerCase();
 
-    if (matchingVoice) utterance.voice = matchingVoice;
+      const matchingVoice = voices.find(
+        (v) =>
+          v.lang.toLowerCase() === profile.locale.toLowerCase() ||
+          v.lang.replace('_', '-').toLowerCase().startsWith(langPrefix)
+      ) || voices.find(
+        (v) =>
+          (lang === 'english' || lang === 'hinglish') &&
+          (v.name.toLowerCase().includes('india') || v.lang.toLowerCase().includes('en-in'))
+      );
 
-    utterance.onstart = () => setIsSpeaking(true);
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
+      if (matchingVoice) utterance.voice = matchingVoice;
 
-    window.speechSynthesis.speak(utterance);
+      utterance.onstart = () => {
+        setIsSpeaking(true);
+        keepAliveTimerRef.current = setInterval(() => {
+          if (window.speechSynthesis.speaking && !window.speechSynthesis.paused) {
+            window.speechSynthesis.pause();
+            window.speechSynthesis.resume();
+          }
+        }, 10000);
+      };
+      const cleanupSpeaking = () => {
+        setIsSpeaking(false);
+        if (keepAliveTimerRef.current) {
+          clearInterval(keepAliveTimerRef.current);
+          keepAliveTimerRef.current = null;
+        }
+      };
+      utterance.onend = cleanupSpeaking;
+      utterance.onerror = cleanupSpeaking;
+
+      window.speechSynthesis.speak(utterance);
+    };
+
+    // If something is currently speaking, cancel first and delay to avoid Chrome's
+    // timing bug where speak() is silently dropped right after cancel().
+    if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
+      window.speechSynthesis.cancel();
+      setTimeout(doSpeak, 100);
+    } else {
+      doSpeak();
+    }
   };
 
   const playFullCall = () => {
@@ -320,6 +371,7 @@ export const VoiceRecoveryPanel: React.FC<VoiceRecoveryPanelProps> = ({
       const utterance = new SpeechSynthesisUtterance(spokenText);
       utterance.rate = turn.role === 'agent' ? 0.92 : 1.05;
       utterance.pitch = turn.role === 'agent' ? 1.0 : 1.15;
+      utterance.volume = 1.0;
 
       const profile = languageProfile(turnLang);
       const voices = voicesRef.current.length ? voicesRef.current : window.speechSynthesis.getVoices();
@@ -343,7 +395,8 @@ export const VoiceRecoveryPanel: React.FC<VoiceRecoveryPanelProps> = ({
       window.speechSynthesis.speak(utterance);
     };
 
-    playNext();
+    // Delay first play to let cancel() from stopAudio() complete (Chrome timing bug)
+    setTimeout(playNext, 100);
   };
 
   const handleStartSession = async () => {
@@ -470,7 +523,7 @@ export const VoiceRecoveryPanel: React.FC<VoiceRecoveryPanelProps> = ({
     }
   };
 
-  const handleBrowserMicrophone = () => {
+  const handleBrowserMicrophone = async () => {
     if (isBrowserListening) {
       browserRecognitionRef.current?.stop?.();
       return;
@@ -499,11 +552,33 @@ export const VoiceRecoveryPanel: React.FC<VoiceRecoveryPanelProps> = ({
     recognition.onerror = (event: any) => {
       setIsBrowserListening(false);
       browserRecognitionRef.current = null;
-      setErrorMsg(
-        event?.error === 'no-speech'
-          ? 'I could not hear clear speech. Please move closer to the microphone and try again.'
-          : `Speech recognition failed${event?.error ? `: ${event.error}` : ''}.`
-      );
+
+      const errorCode = event?.error || '';
+      let userMessage: string;
+      switch (errorCode) {
+        case 'not-allowed':
+          userMessage =
+            'Microphone permission was blocked. Click the 🔒 lock icon in your browser address bar, set Microphone to "Allow", then reload the page. You can also type your response below.';
+          break;
+        case 'no-speech':
+          userMessage =
+            'No speech was detected. Please move closer to the microphone and speak clearly, or try again.';
+          break;
+        case 'audio-capture':
+          userMessage =
+            'No microphone was found. Please connect a microphone and try again, or use the text input.';
+          break;
+        case 'network':
+          userMessage =
+            'Network error during speech recognition. Please check your internet connection and try again.';
+          break;
+        case 'aborted':
+          userMessage = '';
+          break;
+        default:
+          userMessage = `Speech recognition error: ${errorCode || 'unknown'}. Please try again or type your response.`;
+      }
+      if (userMessage) setErrorMsg(userMessage);
     };
     recognition.onresult = (event: any) => {
       const alternatives = Array.from(event.results?.[0] || []) as Array<{
@@ -527,7 +602,14 @@ export const VoiceRecoveryPanel: React.FC<VoiceRecoveryPanelProps> = ({
     };
 
     browserRecognitionRef.current = recognition;
-    recognition.start();
+    try {
+      recognition.start();
+    } catch (startErr: any) {
+      setErrorMsg(
+        `Could not start speech recognition: ${startErr?.message || 'unknown error'}. ` +
+        'Please reload the page and try again, or use the text input.'
+      );
+    }
   };
 
   const handleConfirmAction = async () => {
@@ -602,7 +684,7 @@ export const VoiceRecoveryPanel: React.FC<VoiceRecoveryPanelProps> = ({
             <div className="flex items-center space-x-2">
               <h3 className="text-lg font-bold text-white tracking-wide">Multilingual Voice Recovery Agent</h3>
               <span className="px-2 py-0.5 rounded text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
-                Aarav AI • 7 Languages + 6 Code-Switched Dialects
+                Ray AI • 7 Languages + 6 Code-Switched Dialects
               </span>
             </div>
             <p className="text-xs text-blue-200/80">
@@ -703,6 +785,28 @@ export const VoiceRecoveryPanel: React.FC<VoiceRecoveryPanelProps> = ({
           >
             <ThunderboltOutlined />
             <span>Voice Lab & Reliability</span>
+          </button>
+
+          <button
+            onClick={() => {
+              // Most basic possible TTS test — no voice matching, no processing
+              if (!('speechSynthesis' in window)) {
+                alert('Speech synthesis is not supported in this browser.');
+                return;
+              }
+              window.speechSynthesis.cancel();
+              const u = new SpeechSynthesisUtterance('Hello! I am Ray AI, your payment recovery assistant. Can you hear me?');
+              u.rate = 0.9;
+              u.pitch = 1.0;
+              u.volume = 1.0;
+              u.lang = 'en-US';
+              window.speechSynthesis.speak(u);
+            }}
+            className="px-3 py-1.5 text-xs font-semibold bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 rounded-lg border border-emerald-500/40 transition flex items-center space-x-1.5 cursor-pointer"
+            title="Test if browser audio output is working"
+          >
+            <SoundOutlined />
+            <span>🔊 Test Sound</span>
           </button>
 
           <button
@@ -848,7 +952,7 @@ export const VoiceRecoveryPanel: React.FC<VoiceRecoveryPanelProps> = ({
             </div>
             <h4 className="text-base font-bold text-gray-800 mb-1">Consent-Based Multilingual Voice Assistant</h4>
             <p className="text-xs text-gray-500 max-w-md mx-auto mb-4">
-              Demonstrates real-time multilingual recovery dialogue with Aarav. Aarav asks for customer consent, explains failed subscription renewal in local languages, and safely coordinates payment links or Promise-to-Pay.
+              Demonstrates real-time multilingual recovery dialogue with Ray AI. Ray AI asks for customer consent, explains failed subscription renewal in local languages, and safely coordinates payment links or Promise-to-Pay.
             </p>
             <button
               onClick={handleStartSession}
@@ -1042,7 +1146,7 @@ export const VoiceRecoveryPanel: React.FC<VoiceRecoveryPanelProps> = ({
                         <div className="flex items-center justify-between text-[10px] text-slate-300 mb-1 gap-2">
                           <span className="font-bold uppercase tracking-wider flex items-center space-x-1.5">
                             {isTurnActive && <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-ping"></span>}
-                            <span>{turn.role === 'customer' ? 'Customer' : 'Aarav (AI Agent)'}</span>
+                            <span>{turn.role === 'customer' ? 'Customer' : 'Ray AI (Agent)'}</span>
                           </span>
                           {turn.detected_intent && (
                             <span className="px-1.5 py-0.5 rounded bg-blue-900/80 text-blue-200 font-mono text-[9px] border border-blue-700">
