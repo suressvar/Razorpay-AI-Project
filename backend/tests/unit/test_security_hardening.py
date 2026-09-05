@@ -221,3 +221,49 @@ async def test_kill_switch_checked_immediately_before_side_effects():
     adapter = orchestrator.payment_link_adapter
     res_link = await adapter.create_payment_link(case)
     assert res_link.status == "BLOCKED_BY_KILL_SWITCH"
+
+
+@pytest.mark.asyncio
+async def test_operator_login_logout_and_session_expiration():
+    """Verify login issues valid session token, logout revokes it, and expired sessions are rejected."""
+    import time
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # 1. Invalid credentials -> 401
+        bad_login = await client.post("/auth/login", json={"username": "admin", "password": "wrong_password"})
+        assert bad_login.status_code == 401
+
+        # 2. Valid login -> returns new dynamic token
+        good_login = await client.post("/auth/login", json={"username": "admin", "password": "admin_recovery_demo_2026"})
+        assert good_login.status_code == 200
+        data = good_login.json()
+        token = data["access_token"]
+        assert token.startswith("tok_")
+        assert data["role"] == "admin"
+
+        # 3. Access protected endpoint using newly issued token -> 200
+        auth_headers = {"Authorization": f"Bearer {token}"}
+        me_resp = await client.get("/auth/me", headers=auth_headers)
+        assert me_resp.status_code == 200
+        assert me_resp.json()["username"] == "admin"
+
+        # 4. Logout -> token revoked
+        logout_resp = await client.post("/auth/logout", headers=auth_headers)
+        assert logout_resp.status_code == 200
+
+        # 5. Subsequent access using revoked token -> 401 Unauthorized
+        revoked_resp = await client.get("/auth/me", headers=auth_headers)
+        assert revoked_resp.status_code == 401
+
+        # 6. Expired session test
+        expired_login = await client.post("/auth/login", json={"username": "viewer", "password": "viewer_recovery_demo_2026"})
+        exp_token = expired_login.json()["access_token"]
+        # Artificially expire the token in registry
+        from recovery_autopilot.security.auth import TOKEN_REGISTRY
+        if exp_token in TOKEN_REGISTRY:
+            TOKEN_REGISTRY[exp_token].expires_at = time.time() - 10
+
+        exp_resp = await client.get("/auth/me", headers={"Authorization": f"Bearer {exp_token}"})
+        assert exp_resp.status_code == 401
+        assert "expired" in exp_resp.json()["detail"].lower()
+

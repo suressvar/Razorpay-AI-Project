@@ -40,11 +40,17 @@ class BenchmarkReport(BaseModel):
     dev_dataset_size: int = 0
     held_out_dataset_size: int = 0
 
-    # Decision Quality & Policy Metrics
+    # Decision Quality & Policy Metrics (Aggregate)
     action_accuracy_pct: float = 0.0
     escalation_precision_pct: float = 0.0
     escalation_recall_pct: float = 0.0
     policy_violations_count: int = 0
+
+    # Held-Out Split Evaluation Metrics (Disjoint 20% Evaluation)
+    held_out_action_accuracy_pct: float = 0.0
+    held_out_recovery_rate: float = 0.0
+    held_out_escalation_precision_pct: float = 0.0
+    held_out_escalation_recall_pct: float = 0.0
 
     # Agent Metrics
     agent_total_inr_recovered: float
@@ -222,6 +228,51 @@ def calculate_benchmark_report(
             )
         )
 
+    # Calculate Held-Out Split specific metrics (disjoint 20% test slice)
+    if held_out_size > 0 and dev_size < n:
+        ho_scenarios = scenarios[dev_size:]
+        ho_agent_res = agent_results[dev_size:]
+        ho_actions = agent_actions[dev_size:] if agent_actions else []
+        ho_n = len(ho_scenarios)
+
+        ho_acc_count = 0
+        ho_tp_esc = 0
+        ho_fp_esc = 0
+        ho_fn_esc = 0
+
+        for idx, ho_s in enumerate(ho_scenarios):
+            ho_act = ho_actions[idx] if idx < len(ho_actions) else None
+            if ho_act:
+                if ho_act in ho_s.expected_safe_actions or ho_act == ho_s.ground_truth_optimal_action:
+                    ho_acc_count += 1
+                is_esc = (ho_act == RecoveryAction.HUMAN_REVIEW)
+            else:
+                is_esc = ho_agent_res[idx].human_review_needed
+                ho_acc_count += 1 if ho_agent_res[idx].recovered else 0
+
+            ho_gt_esc = (
+                ho_s.ground_truth_optimal_action == RecoveryAction.HUMAN_REVIEW
+                or ho_s.context.amount_inr >= 15000.0
+                or ho_s.context.failure_category.value == "UNKNOWN_FAILURE"
+            )
+            if is_esc and ho_gt_esc:
+                ho_tp_esc += 1
+            elif is_esc and not ho_gt_esc:
+                ho_fp_esc += 1
+            elif not is_esc and ho_gt_esc:
+                ho_fn_esc += 1
+
+        held_out_action_accuracy = round(ho_acc_count / ho_n * 100, 2) if ho_n else 0.0
+        held_out_esc_precision = round(ho_tp_esc / (ho_tp_esc + ho_fp_esc) * 100, 2) if (ho_tp_esc + ho_fp_esc) else 100.0
+        held_out_esc_recall = round(ho_tp_esc / (ho_tp_esc + ho_fn_esc) * 100, 2) if (ho_tp_esc + ho_fn_esc) else 100.0
+        held_out_rec_count = sum(1 for r in ho_agent_res if r.recovered)
+        held_out_rec_rate = round(held_out_rec_count / ho_n * 100, 2) if ho_n else 0.0
+    else:
+        held_out_action_accuracy = action_accuracy
+        held_out_esc_precision = esc_precision
+        held_out_esc_recall = esc_recall
+        held_out_rec_rate = round(agent_rate, 2)
+
     return BenchmarkReport(
         dataset_size=n,
         random_seed=seed,
@@ -236,6 +287,10 @@ def calculate_benchmark_report(
         escalation_precision_pct=esc_precision,
         escalation_recall_pct=esc_recall,
         policy_violations_count=agent_violations,
+        held_out_action_accuracy_pct=held_out_action_accuracy,
+        held_out_recovery_rate=held_out_rec_rate,
+        held_out_escalation_precision_pct=held_out_esc_precision,
+        held_out_escalation_recall_pct=held_out_esc_recall,
         agent_total_inr_recovered=round(agent_total_inr, 2),
         agent_recovery_rate=round(agent_rate, 2),
         agent_median_recovery_time_hours=round(agent_median_time, 1),

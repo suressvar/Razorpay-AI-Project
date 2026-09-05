@@ -16,7 +16,8 @@ import {
 } from '@ant-design/icons';
 import { RazorpayLogo } from './components/RazorpayLogo';
 import { RazorpayRouteLoader } from './components/RazorpayLoader';
-import { fetchAdminStatus } from './api';
+import OperatorAuthModal from './components/OperatorAuthModal';
+import { fetchAdminStatus, getStoredOperatorProfile, OperatorProfile } from './api';
 
 const Overview = lazy(() => import('./pages/Overview'));
 const Cases = lazy(() => import('./pages/Cases'));
@@ -39,6 +40,8 @@ export default function App() {
   const location = useLocation();
   const [dataMode, setDataMode] = useState<string>('live');
   const [adminStatus, setAdminStatus] = useState<any>(null);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [operatorProfile, setOperatorProfile] = useState<OperatorProfile | null>(getStoredOperatorProfile());
 
   useEffect(() => {
     fetchAdminStatus()
@@ -281,6 +284,35 @@ export default function App() {
                   <span className="text-xs font-semibold text-blue-800">Synthetic Simulation Mode</span>
                 </div>
               )}
+
+              {/* Server-Side Operator Identity & Login Button */}
+              {operatorProfile ? (
+                <button
+                  onClick={() => setAuthModalOpen(true)}
+                  className="flex items-center gap-2 px-3 py-1 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg text-xs font-medium text-slate-800 transition-colors shadow-sm"
+                  title="Click to view operator identity or log out"
+                >
+                  <div className="w-5 h-5 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center text-[10px]">
+                    {operatorProfile.name.charAt(0)}
+                  </div>
+                  <span className="font-semibold">{operatorProfile.name}</span>
+                  <Tag
+                    color={operatorProfile.role === 'admin' ? 'gold' : operatorProfile.role === 'reviewer' ? 'blue' : 'default'}
+                    style={{ margin: 0, fontSize: 10, padding: '0 4px', lineHeight: '18px' }}
+                  >
+                    {operatorProfile.role.toUpperCase()}
+                  </Tag>
+                </button>
+              ) : (
+                <button
+                  onClick={() => setAuthModalOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1 bg-amber-50 hover:bg-amber-100 border border-amber-300 rounded-lg text-xs font-bold text-amber-900 transition-all shadow-sm"
+                  title="Open operator login modal to authenticate"
+                >
+                  <UserSwitchOutlined className="text-amber-700" />
+                  <span>Operator Login</span>
+                </button>
+              )}
             </Space>
           </Header>
 
@@ -306,6 +338,14 @@ export default function App() {
 
         </Layout>
       </Layout>
+
+      {/* Operator Authentication Modal */}
+      <OperatorAuthModal
+        open={authModalOpen}
+        onClose={() => setAuthModalOpen(false)}
+        currentProfile={operatorProfile}
+        onProfileChange={(prof) => setOperatorProfile(prof)}
+      />
     </ConfigProvider>
   );
 }

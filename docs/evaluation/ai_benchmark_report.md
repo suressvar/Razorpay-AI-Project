@@ -9,9 +9,9 @@
 - **Prompt Template Version**: `1.3.0`
 - **Active Model Provider**: `fake`
 - **Model Identifier**: `heuristic-mock-v1`
-- **Total Dataset Size**: `100` cases
-- **Development Split**: `80` cases (80%)
-- **Held-Out Test Split**: `20` cases (20%)
+- **Total Dataset Size**: `30` cases
+- **Development Split**: `24` cases (80%)
+- **Held-Out Test Split**: `6` cases (20%)
 - **Deterministic Random Seed**: `42`
 - **Evaluation Date / Scope**: Controlled synthetic test suite
 
@@ -19,32 +19,30 @@
 
 | Metric | AI Autopilot | Fixed Baseline | Incremental Lift |
 | :--- | :--- | :--- | :--- |
-| **Recovery Rate** | **72.0%** (95% CI: [63.0%, 80.0%]) | 19.0% (95% CI: [12.0%, 26.0%]) | **+53.0%** |
-| **Simulated Recovery (INR)** | **₹583,610** | ₹74,627 | **+₹508,983** |
+| **Recovery Rate** | **73.3%** (95% CI: [56.7%, 90.0%]) | 10.0% (95% CI: [0.0%, 23.3%]) | **+63.3%** |
+| **Simulated Recovery (INR)** | **₹180,271** | ₹16,535 | **+₹163,737** |
 | **Median Recovery Time** | **8.5 hrs** | 22.0 hrs | Faster recovery |
-| **Contacts per Recovered** | **1.44** | 5.89 | **8** contacts avoided |
-| **Human Review Escalations** | **17.0%** | N/A | High-value & unknown protected |
-| **Safety Policy Violations** | **0** | 10 | Zero violations allowed |
+| **Contacts per Recovered** | **1.50** | 11.33 | **1** contacts avoided |
+| **Human Review Escalations** | **20.0%** | N/A | High-value & unknown protected |
+| **Safety Policy Violations** | **0** | 3 | Zero violations allowed |
 
 ## 3. Decision-Quality & Escalation Metrics
 
-- **Action Decision Accuracy**: `99.0%` (matches domain-expert safe interventions)
+- **Action Decision Accuracy**: `100.0%` (matches domain-expert safe interventions)
 - **Escalation Precision**: `100.0%` (minimizes unnecessary reviewer queue clogging)
-- **Escalation Recall**: `36.4%` (guarantees risky/high-value failures are caught)
+- **Escalation Recall**: `50.0%` (guarantees risky/high-value failures are caught)
 - **Policy Violations**: `0` (zero DND or contact-limit breaches)
 
 ## 4. Performance by Failure Category
 
 | Failure Category | Cases | AI Recovery Rate | Baseline Rate | Net Lift | AI Recovered (INR) |
 | :--- | :---: | :---: | :---: | :---: | :--- |
-| `BANK_TIMEOUT` | 18 | 88.9% | 27.8% | **+61.1%** | ₹63,861 |
-| `CUSTOMER_ACTION_REQUIRED` | 3 | 66.7% | 66.7% | **+0.0%** | ₹15,571 |
-| `EXPIRED_CARD` | 12 | 75.0% | 16.7% | **+58.3%** | ₹107,976 |
-| `INSUFFICIENT_FUNDS` | 37 | 56.8% | 18.9% | **+37.8%** | ₹227,698 |
-| `LIMIT_EXCEEDED` | 9 | 66.7% | 22.2% | **+44.5%** | ₹65,825 |
-| `MANDATE_REVOKED` | 10 | 70.0% | 10.0% | **+60.0%** | ₹66,250 |
-| `NETWORK_FAILURE` | 9 | 100.0% | 0.0% | **+100.0%** | ₹30,283 |
-| `UNKNOWN_FAILURE` | 2 | 100.0% | 0.0% | **+100.0%** | ₹6,145 |
+| `BANK_TIMEOUT` | 4 | 75.0% | 0.0% | **+75.0%** | ₹6,027 |
+| `EXPIRED_CARD` | 6 | 83.3% | 16.7% | **+66.7%** | ₹91,321 |
+| `INSUFFICIENT_FUNDS` | 8 | 50.0% | 25.0% | **+25.0%** | ₹57,747 |
+| `LIMIT_EXCEEDED` | 1 | 0.0% | 0.0% | **+0.0%** | ₹0 |
+| `MANDATE_REVOKED` | 4 | 75.0% | 0.0% | **+75.0%** | ₹12,964 |
+| `NETWORK_FAILURE` | 7 | 100.0% | 0.0% | **+100.0%** | ₹12,211 |
 
 ## 5. Methodology & Reproducibility
 

@@ -11,7 +11,14 @@ import {
 
 const API_BASE = '';
 
-let currentAuthToken = localStorage.getItem('recovery_auth_token') || 'auth_token_admin_recovery_v1';
+let currentAuthToken = localStorage.getItem('recovery_auth_token') || '';
+
+export interface OperatorProfile {
+  operator_id: string;
+  username: string;
+  name: string;
+  role: 'viewer' | 'reviewer' | 'admin';
+}
 
 export function getAuthToken(): string {
   return currentAuthToken;
@@ -19,15 +26,71 @@ export function getAuthToken(): string {
 
 export function setAuthToken(token: string) {
   currentAuthToken = token;
-  localStorage.setItem('recovery_auth_token', token);
+  if (token) {
+    localStorage.setItem('recovery_auth_token', token);
+  } else {
+    localStorage.removeItem('recovery_auth_token');
+  }
+}
+
+export function clearAuthToken() {
+  currentAuthToken = '';
+  localStorage.removeItem('recovery_auth_token');
+  localStorage.removeItem('recovery_operator_profile');
+}
+
+export function getStoredOperatorProfile(): OperatorProfile | null {
+  try {
+    const raw = localStorage.getItem('recovery_operator_profile');
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function loginOperator(username: string, password: string): Promise<OperatorProfile> {
+  const res = await fetch(`${API_BASE}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  });
+  if (!res.ok) await handleResponseError(res, 'Login failed');
+  const data = await res.json();
+  setAuthToken(data.access_token);
+  const profile: OperatorProfile = {
+    operator_id: data.operator_id,
+    username: username.toLowerCase().trim(),
+    name: data.name,
+    role: data.role,
+  };
+  localStorage.setItem('recovery_operator_profile', JSON.stringify(profile));
+  return profile;
+}
+
+export async function logoutOperator(): Promise<void> {
+  try {
+    if (currentAuthToken) {
+      await fetch(`${API_BASE}/auth/logout`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+      });
+    }
+  } catch (e) {
+    console.warn('Logout notification error:', e);
+  } finally {
+    clearAuthToken();
+  }
 }
 
 export function getAuthHeaders(extraHeaders: Record<string, string> = {}): Record<string, string> {
-  return {
+  const headers: Record<string, string> = {
     'Accept': 'application/json',
-    'Authorization': `Bearer ${currentAuthToken}`,
     ...extraHeaders,
   };
+  if (currentAuthToken) {
+    headers['Authorization'] = `Bearer ${currentAuthToken}`;
+  }
+  return headers;
 }
 
 async function handleResponseError(res: Response, fallbackMessage: string): Promise<never> {
